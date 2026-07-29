@@ -7,7 +7,7 @@ BOOTLOADER_BACKUP_URL=https://gold-constitutional-hyena-424.mypinata.cloud/ipfs/
 BOOTLOADER_SHA256=a37c4e82a970ae2350fcfc7180559caf1dc3928e7c169316fe4ab899b7d305ad
 
 cleanup() {
-    rm -rf "${TMPDIR}"
+    rm -rf "${TMPDIR}" || :
     exit "$1"
 }
 
