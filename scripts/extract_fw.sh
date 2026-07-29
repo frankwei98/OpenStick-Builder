@@ -2,12 +2,18 @@
 
 TMPDIR=$(mktemp -d)
 BOOTLOADER_ARCHIVE=dragonboard-410c-bootloader-emmc-linux-176.zip
-BOOTLOADER_URL=https://storage.lavacloud.io/artifacts/dragonboard-410c/${BOOTLOADER_ARCHIVE}
+BOOTLOADER_PRIMARY_URL=https://storage.lavacloud.io/artifacts/dragonboard-410c/${BOOTLOADER_ARCHIVE}
+BOOTLOADER_BACKUP_URL=https://gold-constitutional-hyena-424.mypinata.cloud/ipfs/bafybeig3g2eoottmhfmyp3iqo5xv5ipgur5bofnsqfm3uxa7xjtq2inrz4
 BOOTLOADER_SHA256=a37c4e82a970ae2350fcfc7180559caf1dc3928e7c169316fe4ab899b7d305ad
 
 cleanup() {
     rm -rf "${TMPDIR}"
     exit "$1"
+}
+
+download_bootloader() {
+    wget -O "${TMPDIR}/${BOOTLOADER_ARCHIVE}" "$1" &&
+        echo "${BOOTLOADER_SHA256}  ${TMPDIR}/${BOOTLOADER_ARCHIVE}" | sha256sum -c -
 }
 
 trap 'cleanup $?' EXIT
@@ -49,8 +55,10 @@ dd if=${TMPDIR}/gpt.img bs=512 skip=2 count=32 >> files/gpt_both0.bin
 dd if=${TMPDIR}/gpt.img bs=512 skip=350241 >> files/gpt_both0.bin
 
 # extract Qualcom firmware
-wget -O "${TMPDIR}/${BOOTLOADER_ARCHIVE}" "${BOOTLOADER_URL}"
-echo "${BOOTLOADER_SHA256}  ${TMPDIR}/${BOOTLOADER_ARCHIVE}" | sha256sum -c -
+if ! download_bootloader "${BOOTLOADER_PRIMARY_URL}"; then
+    echo "Primary bootloader source failed; trying backup" >&2
+    download_bootloader "${BOOTLOADER_BACKUP_URL}"
+fi
 
 unzip -o -j -d files/ "${TMPDIR}/${BOOTLOADER_ARCHIVE}" \
     dragonboard-410c-bootloader-emmc-linux-176/rpm.mbn \
