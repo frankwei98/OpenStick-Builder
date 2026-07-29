@@ -1,0 +1,20 @@
+[Unit]
+Description=Root console on USB serial gadget
+Requires=openstick-usb-gadget.service
+After=openstick-usb-gadget.service
+BindsTo=openstick-usb-gadget.service
+
+[Service]
+Type=idle
+ExecStart=-/sbin/agetty --autologin root -L %I 115200 vt100
+Restart=always
+RestartSec=0
+UtmpIdentifier=%I
+TTYPath=/dev/%I
+TTYReset=yes
+TTYVHangup=yes
+KillMode=process
+IgnoreSIGPIPE=no
+
+[Install]
+WantedBy=multi-user.target
