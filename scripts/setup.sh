@@ -18,6 +18,7 @@ apt install -qqy --no-install-recommends \
     e2fsprogs \
     exfatprogs \
     hostapd \
+    iproute2 \
     iptables \
     libconfig9 \
     locales \

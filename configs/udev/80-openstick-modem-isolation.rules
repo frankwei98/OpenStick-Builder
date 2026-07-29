@@ -1,0 +1,2 @@
+# The service still verifies driver identity and dev_port before doing anything.
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="bam-dmux", TAG+="systemd", ENV{SYSTEMD_WANTS}+="openstick-modem-isolate@%k.service"
