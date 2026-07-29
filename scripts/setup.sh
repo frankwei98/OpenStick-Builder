@@ -20,7 +20,7 @@ apt install -qqy --no-install-recommends \
     hostapd \
     iproute2 \
     iptables \
-    libconfig9 \
+    libconfig11 \
     locales \
     modemmanager \
     netcat-traditional \
