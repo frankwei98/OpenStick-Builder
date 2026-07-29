@@ -43,6 +43,16 @@ sed -i "/localhost/ s/$/ ${HOST_NAME}/" ${CHROOT}/etc/hosts
 cp -a configs/system/* ${CHROOT}/etc/systemd/system
 
 cp -a scripts/msm-firmware-loader.sh ${CHROOT}/usr/sbin
+install -D -m 0755 scripts/openstick-usb-gadget.sh \
+    ${CHROOT}/usr/sbin/openstick-usb-gadget
+install -D -m 0644 configs/openstick-usb-gadget.conf \
+    ${CHROOT}/etc/default/openstick-usb-gadget
+
+mkdir -p ${CHROOT}/etc/systemd/system/multi-user.target.wants
+ln -sf /etc/systemd/system/openstick-usb-gadget.service \
+    ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-usb-gadget.service
+ln -sf /etc/systemd/system/getty@ttyGS0.service \
+    ${CHROOT}/etc/systemd/system/multi-user.target.wants/getty@ttyGS0.service
 
 # setup NetworkManager
 cp configs/*.nmconnection ${CHROOT}/etc/NetworkManager/system-connections

@@ -1,0 +1,16 @@
+[Unit]
+Description=OpenStick USB development gadget
+Requires=sys-kernel-config.mount
+After=local-fs.target systemd-modules-load.service sys-kernel-config.mount
+Before=NetworkManager.service network-pre.target
+ConditionDirectoryNotEmpty=/sys/class/udc
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/sbin/modprobe libcomposite
+ExecStart=/usr/sbin/openstick-usb-gadget start
+ExecStop=/usr/sbin/openstick-usb-gadget stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

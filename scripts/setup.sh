@@ -15,6 +15,7 @@ apt autoremove -qqy
 apt install -qqy --no-install-recommends \
     bridge-utils \
     dnsmasq \
+    exfatprogs \
     hostapd \
     iptables \
     libconfig9 \
