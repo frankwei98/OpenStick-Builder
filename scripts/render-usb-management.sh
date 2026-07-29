@@ -168,7 +168,7 @@ cat > "${ROOTFS}/etc/ssh/sshd_config.d/00-openstick-usb-root.conf" << EOF
 PermitEmptyPasswords no
 PermitRootLogin prohibit-password
 
-Match User root LocalAddress ${USB_DEVICE_ADDRESS}
+Match User root Address ${USB_HOST_ADDRESS} LocalAddress ${USB_DEVICE_ADDRESS}
     PermitRootLogin yes
     PasswordAuthentication yes
 

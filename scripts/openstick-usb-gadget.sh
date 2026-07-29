@@ -8,9 +8,6 @@ GADGET_NAME=${GADGET_NAME:-openstick}
 GADGET_PATH="${CONFIGFS_ROOT}/usb_gadget/${GADGET_NAME}"
 STATE_DIR=${STATE_DIR:-/var/lib/openstick-usb-gadget}
 
-ENABLE_RNDIS=1
-ENABLE_ACM=1
-ENABLE_UMS=1
 USB_VENDOR_ID="0x1d6b"
 USB_PRODUCT_ID="0x0104"
 USB_DEVICE_VERSION="0x0100"
@@ -22,7 +19,6 @@ RNDIS_DEVICE_MAC=""
 UMS_IMAGE="${STATE_DIR}/storage.img"
 UMS_IMAGE_SIZE_MB=100
 UMS_LABEL="OPENSTICK"
-UMS_READONLY=0
 UDC_DEVICE=""
 
 log() {
@@ -31,15 +27,7 @@ log() {
 
 die() {
     log "error: $*"
-    exit 1
-}
-
-validate_boolean() {
-    local name=$1
-    local value=$2
-
-    [[ "${value}" == "0" || "${value}" == "1" ]] ||
-        die "${name} must be 0 or 1"
+    return 1
 }
 
 load_config() {
@@ -95,36 +83,55 @@ mac_from_seed() {
 }
 
 prepare_ums_image() {
+    local command_name
+    local expected_size
     local image_dir
-    local image_type
     local temporary_image
 
     [[ "${UMS_IMAGE_SIZE_MB}" =~ ^[1-9][0-9]*$ ]] ||
         die "UMS_IMAGE_SIZE_MB must be a positive integer"
-    [[ "${UMS_READONLY}" == "0" || "${UMS_READONLY}" == "1" ]] ||
-        die "UMS_READONLY must be 0 or 1"
+    expected_size=$((UMS_IMAGE_SIZE_MB * 1024 * 1024))
+    image_dir=$(dirname "${UMS_IMAGE}")
+    mkdir -p "${image_dir}"
+
+    for command_name in blkid fsck.exfat stat; do
+        command -v "${command_name}" >/dev/null 2>&1 ||
+            die "${command_name} is required to validate the UMS image"
+    done
+
+    [[ ! -L "${UMS_IMAGE}" ]] ||
+        die "refusing symlink as UMS image: ${UMS_IMAGE}"
 
     if [[ -e "${UMS_IMAGE}" ]]; then
         [[ -f "${UMS_IMAGE}" ]] || die "existing UMS image is not a regular file: ${UMS_IMAGE}"
-        image_type=$(blkid -p -s TYPE -o value "${UMS_IMAGE}" 2>/dev/null || true)
-        if [[ "${image_type}" != "exfat" ]]; then
-            log "warning: preserving existing UMS image with filesystem '${image_type:-unknown}'"
+        if ! validate_ums_image "${UMS_IMAGE}" "${expected_size}"; then
+            die "existing UMS image is invalid and was preserved unchanged"
         fi
         return
     fi
 
-    command -v mkfs.exfat >/dev/null 2>&1 ||
-        die "mkfs.exfat is required to create the UMS image"
+    for command_name in mkfs.exfat truncate; do
+        command -v "${command_name}" >/dev/null 2>&1 ||
+            die "${command_name} is required to create the UMS image"
+    done
 
-    image_dir=$(dirname "${UMS_IMAGE}")
-    mkdir -p "${image_dir}"
-    temporary_image="${UMS_IMAGE}.new.$$"
+    temporary_image=$(mktemp "${UMS_IMAGE}.new.XXXXXX")
     umask 077
 
-    if ! truncate -s "${UMS_IMAGE_SIZE_MB}M" "${temporary_image}" ||
+    if ! truncate -s "${expected_size}" "${temporary_image}" ||
         ! mkfs.exfat -L "${UMS_LABEL}" "${temporary_image}"; then
         rm -f -- "${temporary_image}"
         die "failed to create exFAT UMS image"
+    fi
+
+    if ! validate_ums_image "${temporary_image}" "${expected_size}"; then
+        rm -f -- "${temporary_image}"
+        die "new UMS image failed validation"
+    fi
+
+    if [[ -e "${UMS_IMAGE}" || -L "${UMS_IMAGE}" ]]; then
+        rm -f -- "${temporary_image}"
+        die "UMS image appeared while a new image was being created"
     fi
 
     if ! chmod 0600 "${temporary_image}" ||
@@ -136,9 +143,45 @@ prepare_ums_image() {
     log "created ${UMS_IMAGE_SIZE_MB} MiB exFAT UMS image at ${UMS_IMAGE}"
 }
 
+validate_ums_image() {
+    local image=$1
+    local expected_size=$2
+    local actual_size
+    local image_label
+    local image_type
+
+    actual_size=$(stat -c '%s' "${image}") ||
+        {
+            log "error: cannot read UMS image size: ${image}"
+            return 1
+        }
+    if [[ "${actual_size}" != "${expected_size}" ]]; then
+        log "error: UMS image size is ${actual_size}; expected ${expected_size}"
+        return 1
+    fi
+
+    image_type=$(blkid -p -s TYPE -o value "${image}" 2>/dev/null || true)
+    if [[ "${image_type}" != "exfat" ]]; then
+        log "error: UMS filesystem is '${image_type:-unknown}', expected exfat"
+        return 1
+    fi
+
+    image_label=$(blkid -p -s LABEL -o value "${image}" 2>/dev/null || true)
+    if [[ "${image_label}" != "${UMS_LABEL}" ]]; then
+        log "error: UMS label is '${image_label:-none}', expected ${UMS_LABEL}"
+        return 1
+    fi
+
+    if ! fsck.exfat -n "${image}" >/dev/null; then
+        log "error: UMS image failed read-only exFAT validation"
+        return 1
+    fi
+
+    return 0
+}
+
 write_gadget_identity() {
     local serial=$1
-    local configuration=""
 
     printf '%s\n' "${USB_VENDOR_ID}" > "${GADGET_PATH}/idVendor"
     printf '%s\n' "${USB_PRODUCT_ID}" > "${GADGET_PATH}/idProduct"
@@ -154,10 +197,7 @@ write_gadget_identity() {
     printf '%s\n' "${USB_PRODUCT}" > "${GADGET_PATH}/strings/0x409/product"
 
     mkdir -p "${GADGET_PATH}/configs/c.1/strings/0x409"
-    [[ "${ENABLE_RNDIS}" == "1" ]] && configuration="${configuration}RNDIS + "
-    [[ "${ENABLE_ACM}" == "1" ]] && configuration="${configuration}serial + "
-    [[ "${ENABLE_UMS}" == "1" ]] && configuration="${configuration}storage + "
-    printf '%s\n' "${configuration% + }" > "${GADGET_PATH}/configs/c.1/strings/0x409/configuration"
+    printf 'RNDIS + serial + storage\n' > "${GADGET_PATH}/configs/c.1/strings/0x409/configuration"
     printf '250\n' > "${GADGET_PATH}/configs/c.1/MaxPower"
 }
 
@@ -197,8 +237,10 @@ add_ums() {
 
     prepare_ums_image
     mkdir -p "${function_path}"
+    printf '1\n' > "${function_path}/stall"
     printf '1\n' > "${function_path}/lun.0/removable"
-    printf '%s\n' "${UMS_READONLY}" > "${function_path}/lun.0/ro"
+    printf '0\n' > "${function_path}/lun.0/ro"
+    printf '0\n' > "${function_path}/lun.0/cdrom"
     printf '0\n' > "${function_path}/lun.0/nofua"
     printf '%s\n' "${UMS_IMAGE}" > "${function_path}/lun.0/file"
     ln -s "${function_path}" "${GADGET_PATH}/configs/c.1/mass_storage.0"
@@ -230,54 +272,117 @@ start_gadget() {
 
     [[ -d "${CONFIGFS_ROOT}/usb_gadget" ]] ||
         die "USB gadget configfs is not mounted"
-    [[ ! -e "${GADGET_PATH}" ]] ||
-        die "gadget already exists: ${GADGET_NAME}"
-    validate_boolean ENABLE_RNDIS "${ENABLE_RNDIS}"
-    validate_boolean ENABLE_ACM "${ENABLE_ACM}"
-    validate_boolean ENABLE_UMS "${ENABLE_UMS}"
-    [[ "${ENABLE_RNDIS}" == "1" || "${ENABLE_ACM}" == "1" || "${ENABLE_UMS}" == "1" ]] ||
-        die "at least one USB function must be enabled"
-
+    if [[ -d "${GADGET_PATH}" ]]; then
+        log "removing existing gadget before reconfiguration"
+        stop_gadget || die "existing gadget could not be removed"
+    elif [[ -e "${GADGET_PATH}" ]]; then
+        die "gadget path exists and is not a directory: ${GADGET_PATH}"
+    fi
     serial=$(read_or_create_serial)
     controller=$(choose_udc)
 
     mkdir "${GADGET_PATH}"
     trap cleanup_failed_start ERR
     write_gadget_identity "${serial}"
-    [[ "${ENABLE_RNDIS}" == "1" ]] && add_rndis "${serial}"
-    [[ "${ENABLE_ACM}" == "1" ]] && add_acm
-    [[ "${ENABLE_UMS}" == "1" ]] && add_ums
+    add_rndis "${serial}"
+    add_acm
+    add_ums
     printf '%s\n' "${controller}" > "${GADGET_PATH}/UDC"
+    validate_bound_gadget "${controller}"
     trap - ERR
 
     log "bound ${GADGET_NAME} to ${controller}"
 }
 
 stop_gadget() {
-    local link
-
     [[ -d "${GADGET_PATH}" ]] || return 0
 
-    printf '\n' > "${GADGET_PATH}/UDC" 2>/dev/null || true
+    if ! printf '\n' > "${GADGET_PATH}/UDC"; then
+        log "error: failed to unbind gadget"
+        return 1
+    fi
     if [[ -e "${GADGET_PATH}/functions/mass_storage.0/lun.0/file" ]]; then
-        printf '\n' > "${GADGET_PATH}/functions/mass_storage.0/lun.0/file" 2>/dev/null || true
+        if ! printf '\n' > "${GADGET_PATH}/functions/mass_storage.0/lun.0/file"; then
+            log "error: failed to detach UMS backing file"
+            return 1
+        fi
     fi
 
-    for link in "${GADGET_PATH}"/configs/c.1/*; do
-        [[ -L "${link}" ]] && rm -f -- "${link}"
+    local object
+    for object in mass_storage.0 acm.GS0 rndis.usb0; do
+        remove_config_link "${GADGET_PATH}/configs/c.1/${object}" || return 1
     done
-    [[ -L "${GADGET_PATH}/os_desc/c.1" ]] && rm -f -- "${GADGET_PATH}/os_desc/c.1"
+    remove_config_link "${GADGET_PATH}/os_desc/c.1" || return 1
 
-    rmdir "${GADGET_PATH}"/functions/* 2>/dev/null || true
-    rmdir "${GADGET_PATH}/configs/c.1/strings/0x409" 2>/dev/null || true
-    rmdir "${GADGET_PATH}/configs/c.1" 2>/dev/null || true
-    rmdir "${GADGET_PATH}/strings/0x409" 2>/dev/null || true
+    for object in mass_storage.0 acm.GS0 rndis.usb0; do
+        remove_config_directory "${GADGET_PATH}/functions/${object}" || return 1
+    done
+    remove_config_directory "${GADGET_PATH}/configs/c.1/strings/0x409" || return 1
+    remove_config_directory "${GADGET_PATH}/configs/c.1" || return 1
+    remove_config_directory "${GADGET_PATH}/strings/0x409" || return 1
 
     if ! rmdir "${GADGET_PATH}"; then
-        die "failed to remove gadget; configfs still contains active objects"
+        log "error: failed to remove gadget; configfs still contains active objects"
+        return 1
     fi
 
     log "removed ${GADGET_NAME}"
+}
+
+remove_config_link() {
+    local path=$1
+
+    if [[ -L "${path}" ]]; then
+        if ! rm -f -- "${path}"; then
+            log "error: failed to remove configfs link ${path}"
+            return 1
+        fi
+    elif [[ -e "${path}" ]]; then
+        log "error: expected a symlink at ${path}"
+        return 1
+    fi
+}
+
+remove_config_directory() {
+    local path=$1
+
+    [[ -d "${path}" ]] || return 0
+    if ! rmdir "${path}"; then
+        log "error: failed to remove configfs directory ${path}"
+        return 1
+    fi
+}
+
+validate_bound_gadget() {
+    local controller=$1
+    local attempt
+    local rndis_interface
+
+    [[ "$(< "${GADGET_PATH}/UDC")" == "${controller}" ]] ||
+        die "UDC binding did not persist"
+
+    [[ -L "${GADGET_PATH}/configs/c.1/rndis.usb0" ]] ||
+        die "RNDIS function is not linked"
+    rndis_interface=$(< "${GADGET_PATH}/functions/rndis.usb0/ifname")
+    [[ "${rndis_interface}" == "usb0" ]] ||
+        die "RNDIS interface is ${rndis_interface:-missing}, expected usb0"
+
+    [[ -L "${GADGET_PATH}/configs/c.1/acm.GS0" ]] ||
+        die "ACM function is not linked"
+    attempt=0
+    while [[ "${attempt}" -lt 30 ]]; do
+        [[ -c /dev/ttyGS0 ]] && break
+        sleep 0.1
+        attempt=$((attempt + 1))
+    done
+    [[ -c /dev/ttyGS0 ]] || die "ACM device /dev/ttyGS0 did not appear"
+
+    [[ -L "${GADGET_PATH}/configs/c.1/mass_storage.0" ]] ||
+        die "UMS function is not linked"
+    [[ "$(< "${GADGET_PATH}/functions/mass_storage.0/lun.0/file")" == "${UMS_IMAGE}" ]] ||
+        die "UMS backing file does not match the configured image"
+    [[ "$(< "${GADGET_PATH}/functions/mass_storage.0/lun.0/ro")" == "0" ]] ||
+        die "UMS backing file unexpectedly became read-only"
 }
 
 cleanup_failed_start() {
@@ -287,6 +392,12 @@ cleanup_failed_start() {
     log "start failed; removing partially configured gadget"
     stop_gadget || true
     exit "${status}"
+}
+
+acquire_lock() {
+    install -d -m 0700 "${STATE_DIR}"
+    exec 9> "${STATE_DIR}/gadget.lock"
+    /usr/bin/flock 9
 }
 
 show_status() {
@@ -303,6 +414,12 @@ show_status() {
 }
 
 load_config
+
+case "${1:-}" in
+    start|stop|restart)
+        acquire_lock
+        ;;
+esac
 
 case "${1:-}" in
     start)

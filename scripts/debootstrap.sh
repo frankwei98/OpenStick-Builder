@@ -58,13 +58,15 @@ install -D -m 0644 configs/openstick-modem-isolation.conf \
 install -D -m 0644 configs/udev/80-openstick-modem-isolation.rules \
     ${CHROOT}/etc/udev/rules.d/80-openstick-modem-isolation.rules
 
-mkdir -p ${CHROOT}/etc/systemd/system/multi-user.target.wants
+mkdir -p \
+    ${CHROOT}/etc/systemd/system/multi-user.target.wants \
+    ${CHROOT}/etc/systemd/system/usb-gadget.target.wants
 ln -sf /etc/systemd/system/openstick-usb-gadget.service \
-    ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-usb-gadget.service
+    ${CHROOT}/etc/systemd/system/usb-gadget.target.wants/openstick-usb-gadget.service
 ln -sf /etc/systemd/system/getty@ttyGS0.service \
-    ${CHROOT}/etc/systemd/system/multi-user.target.wants/getty@ttyGS0.service
+    ${CHROOT}/etc/systemd/system/usb-gadget.target.wants/getty@ttyGS0.service
 ln -sf /etc/systemd/system/openstick-usb-dhcp.service \
-    ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-usb-dhcp.service
+    ${CHROOT}/etc/systemd/system/usb-gadget.target.wants/openstick-usb-dhcp.service
 ln -sf /etc/systemd/system/openstick-resize-rootfs.service \
     ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-resize-rootfs.service
 

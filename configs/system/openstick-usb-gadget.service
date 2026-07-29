@@ -2,15 +2,19 @@
 Description=OpenStick USB development gadget
 Requires=sys-kernel-config.mount
 After=local-fs.target systemd-modules-load.service sys-kernel-config.mount
-Before=NetworkManager.service network-pre.target
-ConditionDirectoryNotEmpty=/sys/class/udc
+Before=NetworkManager.service network-pre.target usb-gadget.target
 
 [Service]
 Type=oneshot
 ExecStartPre=/usr/sbin/modprobe libcomposite
+ExecStartPre=/usr/sbin/modprobe usb_f_rndis
+ExecStartPre=/usr/sbin/modprobe usb_f_acm
+ExecStartPre=/usr/sbin/modprobe usb_f_mass_storage
 ExecStart=/usr/sbin/openstick-usb-gadget start
 ExecStop=/usr/sbin/openstick-usb-gadget stop
 RemainAfterExit=yes
+TimeoutStartSec=30
+TimeoutStopSec=15
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=usb-gadget.target
