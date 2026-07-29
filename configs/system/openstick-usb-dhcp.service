@@ -1,0 +1,17 @@
+[Unit]
+Description=DHCP-only service for the OpenStick USB management link
+Requires=NetworkManager.service openstick-usb-gadget.service
+After=NetworkManager.service openstick-usb-gadget.service
+BindsTo=openstick-usb-gadget.service
+ConditionPathExists=/etc/openstick/usb-dhcp.conf
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/dnsmasq --test --conf-file=/etc/openstick/usb-dhcp.conf
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/openstick/usb-dhcp.conf --pid-file=
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
