@@ -1,0 +1,8 @@
+[Unit]
+Description=Recheck modem channel isolation after %I appeared
+After=msm-firmware-loader.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/openstick-modem-isolate --event-interface %I
+TimeoutStartSec=15

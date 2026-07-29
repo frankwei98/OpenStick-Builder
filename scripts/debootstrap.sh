@@ -51,6 +51,12 @@ install -D -m 0755 scripts/openstick-resize-rootfs.sh \
     ${CHROOT}/usr/sbin/openstick-resize-rootfs
 install -D -m 0644 configs/logind.conf.d/50-openstick-power-key.conf \
     ${CHROOT}/etc/systemd/logind.conf.d/50-openstick-power-key.conf
+install -D -m 0755 scripts/openstick-modem-isolate.sh \
+    ${CHROOT}/usr/sbin/openstick-modem-isolate
+install -D -m 0644 configs/openstick-modem-isolation.conf \
+    ${CHROOT}/etc/default/openstick-modem-isolation
+install -D -m 0644 configs/udev/80-openstick-modem-isolation.rules \
+    ${CHROOT}/etc/udev/rules.d/80-openstick-modem-isolation.rules
 
 mkdir -p ${CHROOT}/etc/systemd/system/multi-user.target.wants
 ln -sf /etc/systemd/system/openstick-usb-gadget.service \

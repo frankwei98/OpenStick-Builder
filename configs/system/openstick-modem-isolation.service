@@ -1,0 +1,10 @@
+[Unit]
+Description=Optionally isolate auxiliary modem network channels
+Wants=msm-firmware-loader.service
+After=msm-firmware-loader.service
+Before=ModemManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/openstick-modem-isolate
+TimeoutStartSec=15
