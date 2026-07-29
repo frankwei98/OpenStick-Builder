@@ -15,6 +15,7 @@ apt autoremove -qqy
 apt install -qqy --no-install-recommends \
     bridge-utils \
     dnsmasq \
+    e2fsprogs \
     exfatprogs \
     hostapd \
     iptables \
@@ -30,6 +31,7 @@ apt install -qqy --no-install-recommends \
     sudo \
     systemd-timesyncd \
     tzdata \
+    util-linux \
     wireguard-tools \
     wpasupplicant
 apt clean

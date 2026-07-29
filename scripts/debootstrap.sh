@@ -47,6 +47,10 @@ install -D -m 0755 scripts/openstick-usb-gadget.sh \
     ${CHROOT}/usr/sbin/openstick-usb-gadget
 install -D -m 0644 configs/openstick-usb-gadget.conf \
     ${CHROOT}/etc/default/openstick-usb-gadget
+install -D -m 0755 scripts/openstick-resize-rootfs.sh \
+    ${CHROOT}/usr/sbin/openstick-resize-rootfs
+install -D -m 0644 configs/logind.conf.d/50-openstick-power-key.conf \
+    ${CHROOT}/etc/systemd/logind.conf.d/50-openstick-power-key.conf
 
 mkdir -p ${CHROOT}/etc/systemd/system/multi-user.target.wants
 ln -sf /etc/systemd/system/openstick-usb-gadget.service \
@@ -55,6 +59,8 @@ ln -sf /etc/systemd/system/getty@ttyGS0.service \
     ${CHROOT}/etc/systemd/system/multi-user.target.wants/getty@ttyGS0.service
 ln -sf /etc/systemd/system/openstick-usb-dhcp.service \
     ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-usb-dhcp.service
+ln -sf /etc/systemd/system/openstick-resize-rootfs.service \
+    ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-resize-rootfs.service
 
 # setup NetworkManager
 cp configs/*.nmconnection ${CHROOT}/etc/NetworkManager/system-connections
@@ -81,6 +87,9 @@ mkdir -p ${CHROOT}/lib/firmware/msm-firmware-loader
 
 # update fstab
 echo "PARTUUID=80780b1d-0fe1-27d3-23e4-9244e62f8c46\t/boot\text2\tdefaults\t0 2" > ${CHROOT}/etc/fstab
+
+# Remove build-time identity immediately before packaging the cloneable image.
+scripts/deidentify-rootfs.sh ${CHROOT}
 
 # backup rootfs
 tar cpzf rootfs.tgz --exclude="usr/bin/qemu-aarch64-static" -C rootfs .

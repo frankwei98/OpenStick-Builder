@@ -1,0 +1,15 @@
+[Unit]
+Description=Expand the OpenStick root filesystem once
+After=local-fs.target systemd-remount-fs.service
+Before=multi-user.target
+ConditionPathIsReadWrite=/
+ConditionPathExists=!/var/lib/openstick/first-boot/rootfs-resized
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/openstick-resize-rootfs
+TimeoutStartSec=5min
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
