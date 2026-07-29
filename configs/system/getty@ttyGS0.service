@@ -6,9 +6,10 @@ BindsTo=openstick-usb-gadget.service
 
 [Service]
 Type=idle
-ExecStart=-/sbin/agetty --autologin root -L %I 115200 vt100
+ExecStartPre=/usr/bin/test -c /dev/%I
+ExecStart=/sbin/agetty --autologin root -L %I 115200 vt100
 Restart=always
-RestartSec=0
+RestartSec=1
 UtmpIdentifier=%I
 TTYPath=/dev/%I
 TTYReset=yes
@@ -17,4 +18,4 @@ KillMode=process
 IgnoreSIGPIPE=no
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=usb-gadget.target

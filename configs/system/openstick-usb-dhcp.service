@@ -14,4 +14,4 @@ RestartSec=2
 TimeoutStopSec=15
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=usb-gadget.target
