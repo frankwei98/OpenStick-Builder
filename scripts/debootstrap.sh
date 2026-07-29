@@ -53,16 +53,18 @@ ln -sf /etc/systemd/system/openstick-usb-gadget.service \
     ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-usb-gadget.service
 ln -sf /etc/systemd/system/getty@ttyGS0.service \
     ${CHROOT}/etc/systemd/system/multi-user.target.wants/getty@ttyGS0.service
+ln -sf /etc/systemd/system/openstick-usb-dhcp.service \
+    ${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-usb-dhcp.service
 
 # setup NetworkManager
 cp configs/*.nmconnection ${CHROOT}/etc/NetworkManager/system-connections
+scripts/render-usb-management.sh ${CHROOT} configs/usb-management.conf
 chmod 0600 ${CHROOT}/etc/NetworkManager/system-connections/*
-sed -i '/\[main\]/a dns=dnsmasq' ${CHROOT}/etc/NetworkManager/NetworkManager.conf
 
-# enable autoconnect for usb0
-cat << EOF > ${CHROOT}/etc/udev/rules.d/99-nm-usb0.rules
-SUBSYSTEM=="net", ACTION=="add|change|move", ENV{DEVTYPE}=="gadget", ENV{NM_UNMANAGED}="0"
-EOF
+# The package service reads the system-wide dnsmasq configuration. Mask it so
+# only the explicitly DHCP-only OpenStick instance can start.
+rm -f ${CHROOT}/etc/systemd/system/multi-user.target.wants/dnsmasq.service
+ln -sf /dev/null ${CHROOT}/etc/systemd/system/dnsmasq.service
 
 # install kernel
 wget -O - http://mirror.postmarketos.org/postmarketos/v24.06/aarch64/linux-postmarketos-qcom-msm8916-6.6-r5.apk \
