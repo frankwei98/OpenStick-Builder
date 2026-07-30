@@ -1,0 +1,68 @@
+name: Build ARM64 Native
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Report build host
+        run: |
+          uname -m
+          dpkg --print-architecture
+
+      - name: Run OpenStick regression tests
+        run: |
+          tests/test-build-host-architecture.sh
+          tests/test-image-configuration.sh
+          tests/test-openstick-modem-isolate.sh
+
+      - name: Install dependencies
+        run: sudo sh -e scripts/install_deps.sh
+
+      - name: Build hyp and aboot firmware
+        run: sudo sh -e scripts/build_hyp_aboot.sh
+
+      - name: Extract MSM8916 firmware
+        run: sudo sh -e scripts/extract_fw.sh
+
+      - name: Create rootfs natively
+        run: sudo sh -e scripts/debootstrap.sh
+
+      - name: Build gadget-tool natively
+        run: sudo sh -e scripts/build_gt.sh
+
+      - name: Create images
+        run: sudo sh -e scripts/build_images.sh
+
+      - name: Validate ARM64 artifacts
+        run: |
+          test "$(sudo chroot rootfs dpkg --print-architecture)" = arm64
+          test ! -e rootfs/usr/bin/qemu-aarch64-static
+          ! tar -tzf rootfs.tgz ./usr/bin/qemu-aarch64-static >/dev/null 2>&1
+          readelf -h files/hyp.mbn | grep -q 'Machine:.*AArch64'
+          readelf -h files/aboot.mbn | grep -q 'Machine:.*ARM'
+          file dist/usr/bin/gt | grep -q 'ARM aarch64'
+          readelf -d dist/usr/bin/gt | grep -q 'Shared library: \[libconfig.so.11\]'
+          if dpkg-query -W -f='${db:Status-Abbrev}\n' qemu-user-static 2>/dev/null |
+              grep -q '^ii '; then
+            echo "ARM64 build host unexpectedly installed qemu-user-static" >&2
+            exit 1
+          fi
+          if sudo find rootfs dist files -type f -exec file {} + |
+              grep -q 'x86-64'; then
+            echo "x86-64 ELF found in ARM64 build output" >&2
+            exit 1
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openstick-debian-arm64
+          path: files/*
