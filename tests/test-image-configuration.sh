@@ -49,8 +49,12 @@ if command -v sshd >/dev/null 2>&1 && command -v ssh-keygen >/dev/null 2>&1; the
 
     grep -qx 'permitrootlogin yes' <<< "${usb_policy}"
     grep -qx 'permitemptypasswords no' <<< "${usb_policy}"
-    grep -qx 'permitrootlogin prohibit-password' <<< "${wifi_source_policy}"
-    grep -qx 'permitrootlogin prohibit-password' <<< "${wifi_target_policy}"
+    # OpenSSH 8.9 reports the legacy "without-password" alias, while newer
+    # releases report the canonical "prohibit-password" spelling.
+    grep -Eqx 'permitrootlogin (prohibit-password|without-password)' \
+        <<< "${wifi_source_policy}"
+    grep -Eqx 'permitrootlogin (prohibit-password|without-password)' \
+        <<< "${wifi_target_policy}"
 fi
 
 ssh-keygen -q -t ed25519 -N '' -f "${ROOTFS}/etc/ssh/ssh_host_ed25519_key"
