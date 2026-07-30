@@ -3,7 +3,22 @@ set -eu
 
 ROOTFS=${1:-}
 
-if [ -z "${ROOTFS}" ] || [ "${ROOTFS}" = "/" ] || [ ! -d "${ROOTFS}/etc" ]; then
+if [ -z "${ROOTFS}" ]; then
+    echo "Usage: $0 ROOTFS" >&2
+    exit 2
+fi
+
+case "${ROOTFS}" in
+    /*) ;;
+    *) ROOTFS="./${ROOTFS}" ;;
+esac
+
+if ! ROOTFS=$(CDPATH='' cd -P "${ROOTFS}" 2>/dev/null && pwd -P); then
+    echo "Usage: $0 ROOTFS" >&2
+    exit 2
+fi
+
+if [ "${ROOTFS}" = "/" ] || [ ! -d "${ROOTFS}/etc" ]; then
     echo "Usage: $0 ROOTFS" >&2
     exit 2
 fi
