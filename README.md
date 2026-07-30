@@ -8,7 +8,19 @@ This builder uses the precompiled [kernel](https://pkgs.postmarketos.org/package
 
 ## Build Instructions
 ### Build locally
-This has been tested to work on **Ubuntu 22.04**
+
+The builder supports these Linux build hosts:
+
+| Build host | Rootfs build mode |
+| --- | --- |
+| Ubuntu 22.04 AMD64 | ARM64 cross-toolchain with foreign debootstrap and QEMU |
+| Ubuntu 24.04 ARM64 | Native ARM64 debootstrap and chroot without QEMU |
+
+The build scripts detect the host architecture with `dpkg` and fail clearly on
+unsupported architectures. The AMD64 path remains available as a compatibility
+fallback, while the ARM64-native path avoids emulation during package
+configuration and is substantially faster.
+
 - clone
   ```shell
   git clone --recurse-submodules https://github.com/kinsamanka/OpenStick-Builder.git
@@ -51,13 +63,18 @@ This has been tested to work on **Ubuntu 22.04**
   sudo scripts/build_images.sh
   ```
 
-The generated firmware files will be stored under the `files` directory
+The generated firmware files will be stored under the `files` directory.
 
-### On the cloud using Github Actions
+### On the cloud using GitHub Actions
 1. Fork this repo
-2. Run the [Build workflow](../../actions/workflows/build.yml)
-   - click and run ***Run workflow***
-   - once the workflow is done, click on the workflow summary and then download the resulting artifact
+2. Choose a workflow:
+   - [Build](../../actions/workflows/build.yml) uses the Ubuntu 22.04 AMD64
+     compatibility path.
+   - [Build ARM64 Native](../../actions/workflows/build-arm64.yml) uses an
+     Ubuntu 24.04 ARM64 runner and builds the ARM64 rootfs natively.
+3. Click ***Run workflow***.
+4. Once the workflow is done, open its summary and download the resulting
+   artifact.
 
 ## Customizations
 Edit [`scripts/setup.sh`](scripts/setup.sh) to add/remove packages. Note that this script is running inside the `chroot` environment.
