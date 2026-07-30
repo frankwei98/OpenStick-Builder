@@ -80,7 +80,7 @@ jobs:
             test -s "files/${artifact}"
           done
           file files/*
-          du -sh rootfs rootfs.tgz dist files
+          sudo du -sh rootfs rootfs.tgz dist files
           df -h /
 
       - name: Upload artifacts
