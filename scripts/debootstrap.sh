@@ -42,6 +42,15 @@ fi
 
 [ "${CHROOT}" != "/" ] || invalid_chroot
 
+BUILD_ROOT=$(physical_directory "$(pwd)") || invalid_chroot
+case "${CHROOT}" in
+    *[!/]*) ;;
+    *) invalid_chroot ;;
+esac
+case "${BUILD_ROOT}/" in
+    "${CHROOT}/"*) invalid_chroot ;;
+esac
+
 rm -rf -- "${CHROOT}"
 
 debootstrap --foreign --arch arm64 \
