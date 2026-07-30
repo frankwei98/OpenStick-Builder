@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=../scripts/build-host.sh
 . "${REPO_ROOT}/scripts/build-host.sh"
 

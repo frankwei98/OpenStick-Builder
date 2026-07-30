@@ -10,13 +10,13 @@ TARGET_PKG_CONFIG_LIBDIR="${TARGET_LIBDIR}/pkgconfig:${CHROOT}/usr/lib/pkgconfig
 
 BUILD_HOST_ARCHITECTURE=$(detect_build_host_architecture)
 require_supported_build_host_architecture "${BUILD_HOST_ARCHITECTURE}"
-ROOTFS_BOOTSTRAP_MODE=$(build_host_rootfs_mode "${BUILD_HOST_ARCHITECTURE}")
+ROOTFS_CHROOT_MODE=$(build_host_rootfs_mode "${BUILD_HOST_ARCHITECTURE}")
 
 printf 'Build host architecture: %s (%s rootfs chroot)\n' \
-    "${BUILD_HOST_ARCHITECTURE}" "${ROOTFS_BOOTSTRAP_MODE}"
+    "${BUILD_HOST_ARCHITECTURE}" "${ROOTFS_CHROOT_MODE}"
 
 # install gt dependencies
-case "${ROOTFS_BOOTSTRAP_MODE}" in
+case "${ROOTFS_CHROOT_MODE}" in
     foreign)
         chroot "${CHROOT}" qemu-aarch64-static /bin/sh \
             -c "apt update; apt install libc6-dev libconfig-dev -y"
