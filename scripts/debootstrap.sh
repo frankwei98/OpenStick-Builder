@@ -141,7 +141,7 @@ cp dtbs/* "${CHROOT}/boot/dtbs/qcom"
 mkdir -p "${CHROOT}/lib/firmware/msm-firmware-loader"
 
 # update fstab
-echo "PARTUUID=80780b1d-0fe1-27d3-23e4-9244e62f8c46\t/boot\text2\tdefaults\t0 2" > "${CHROOT}/etc/fstab"
+printf 'PARTUUID=80780b1d-0fe1-27d3-23e4-9244e62f8c46\t/boot\text2\tdefaults\t0 2\n' > "${CHROOT}/etc/fstab"
 
 # Remove build-time identity immediately before packaging the cloneable image.
 scripts/deidentify-rootfs.sh "${CHROOT}"
