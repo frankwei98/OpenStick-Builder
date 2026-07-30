@@ -18,7 +18,12 @@ if ! ROOTFS=$(CDPATH='' cd -P "${ROOTFS}" 2>/dev/null && pwd -P); then
     exit 2
 fi
 
-if [ "${ROOTFS}" = "/" ] || [ ! -d "${ROOTFS}/etc" ]; then
+case "${ROOTFS}" in
+    *[!/]*) ;;
+    *) echo "Usage: $0 ROOTFS" >&2; exit 2 ;;
+esac
+
+if [ ! -d "${ROOTFS}/etc" ]; then
     echo "Usage: $0 ROOTFS" >&2
     exit 2
 fi
