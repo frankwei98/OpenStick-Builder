@@ -5,6 +5,15 @@ RELEASE=${RELEASE=trixie}
 DEBOOTSTRAP_KEYRING=${DEBOOTSTRAP_KEYRING=$(pwd)/build/debian-archive-keyring.gpg}
 HOST_NAME=${HOST_NAME=openstick-debian}
 
+. scripts/build-host.sh
+
+BUILD_HOST_ARCHITECTURE=$(detect_build_host_architecture)
+require_supported_build_host_architecture "${BUILD_HOST_ARCHITECTURE}"
+ROOTFS_BOOTSTRAP_MODE=$(build_host_rootfs_mode "${BUILD_HOST_ARCHITECTURE}")
+
+printf 'Build host architecture: %s (%s rootfs bootstrap)\n' \
+    "${BUILD_HOST_ARCHITECTURE}" "${ROOTFS_BOOTSTRAP_MODE}"
+
 invalid_chroot() {
     echo "Refusing unsafe CHROOT: ${CHROOT:-<empty>}" >&2
     exit 2
@@ -53,12 +62,19 @@ esac
 
 rm -rf -- "${CHROOT}"
 
-debootstrap --foreign --arch arm64 \
-    --keyring "${DEBOOTSTRAP_KEYRING}" "${RELEASE}" "${CHROOT}"
-
-cp "$(command -v qemu-aarch64-static)" "${CHROOT}/usr/bin"
-
-chroot "${CHROOT}" qemu-aarch64-static /bin/bash /debootstrap/debootstrap --second-stage
+case "${ROOTFS_BOOTSTRAP_MODE}" in
+    foreign)
+        debootstrap --foreign --arch arm64 \
+            --keyring "${DEBOOTSTRAP_KEYRING}" "${RELEASE}" "${CHROOT}"
+        cp "$(command -v qemu-aarch64-static)" "${CHROOT}/usr/bin"
+        chroot "${CHROOT}" qemu-aarch64-static \
+            /bin/bash /debootstrap/debootstrap --second-stage
+        ;;
+    native)
+        debootstrap --arch arm64 \
+            --keyring "${DEBOOTSTRAP_KEYRING}" "${RELEASE}" "${CHROOT}"
+        ;;
+esac
 
 cat << EOF > "${CHROOT}/etc/apt/sources.list"
 deb http://deb.debian.org/debian ${RELEASE} main contrib non-free-firmware
@@ -73,7 +89,14 @@ mount -o bind /dev/pts/ "${CHROOT}/dev/pts/"
 mount -o bind /run "${CHROOT}/run/"
 
 cp scripts/setup.sh "${CHROOT}"
-chroot "${CHROOT}" qemu-aarch64-static /bin/sh -c /setup.sh
+case "${ROOTFS_BOOTSTRAP_MODE}" in
+    foreign)
+        chroot "${CHROOT}" qemu-aarch64-static /bin/sh -c /setup.sh
+        ;;
+    native)
+        chroot "${CHROOT}" /bin/sh -c /setup.sh
+        ;;
+esac
 
 # cleanup
 for a in proc sys dev/pts dev run; do

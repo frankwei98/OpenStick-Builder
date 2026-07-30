@@ -4,18 +4,26 @@ DEBIAN_ARCHIVE_KEYRING_VERSION=2025.1
 DEBIAN_ARCHIVE_KEYRING_SHA256=9ea7778e443144ca490668737a8ab22dd3e748bb99e805e22ec055abeb3c7fac
 DEBOOTSTRAP_KEYRING=${DEBOOTSTRAP_KEYRING=$(pwd)/build/debian-archive-keyring.gpg}
 
+. scripts/build-host.sh
+
+BUILD_HOST_ARCHITECTURE=$(detect_build_host_architecture)
+require_supported_build_host_architecture "${BUILD_HOST_ARCHITECTURE}"
+BUILD_HOST_EXTRA_PACKAGES=$(build_host_extra_packages "${BUILD_HOST_ARCHITECTURE}")
+
+printf 'Build host architecture: %s\n' "${BUILD_HOST_ARCHITECTURE}"
+
 apt update
+# BUILD_HOST_EXTRA_PACKAGES is a trusted, space-separated list defined in
+# scripts/build-host.sh.
+# shellcheck disable=SC2086
 apt install -y \
     android-sdk-libsparse-utils \
     autoconf \
     automake \
-    binfmt-support \
     cmake \
     debootstrap \
     device-tree-compiler \
     fdisk \
-    g++-aarch64-linux-gnu \
-    gcc-aarch64-linux-gnu \
     gcc-arm-none-eabi \
     libtool \
     make \
@@ -23,9 +31,9 @@ apt install -y \
     python3-cryptography \
     python3-pyasn1-modules \
     python3-pycryptodome \
-    qemu-user-static \
     unzip \
-    wget
+    wget \
+    ${BUILD_HOST_EXTRA_PACKAGES}
 
 KEYRING_TEMP_DIR=$(mktemp -d)
 KEYRING_PACKAGE="${KEYRING_TEMP_DIR}/debian-archive-keyring.deb"
