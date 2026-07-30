@@ -21,6 +21,7 @@ mkdir -p build
 cd build
 CC=aarch64-linux-gnu-gcc \
 CFLAGS="${TARGET_CFLAGS}" \
+PKG_CONFIG_PATH='' \
 PKG_CONFIG_LIBDIR="${TARGET_PKG_CONFIG_LIBDIR}" \
     "${SRCDIR}/libusbgx/configure" \
         --host aarch64-linux-gnu \
@@ -30,6 +31,7 @@ PKG_CONFIG_LIBDIR="${TARGET_PKG_CONFIG_LIBDIR}" \
 make -C build "DESTDIR=$(pwd)/dist" install
 
 rm -rf build/*
+PKG_CONFIG_PATH='' \
 PKG_CONFIG_LIBDIR="$(pwd)/dist/usr/lib/pkgconfig:${TARGET_PKG_CONFIG_LIBDIR}" \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
