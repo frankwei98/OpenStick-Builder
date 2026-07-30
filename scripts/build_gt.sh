@@ -6,9 +6,26 @@ TARGET_LIBDIR="${CHROOT}/usr/lib/aarch64-linux-gnu"
 TARGET_CFLAGS="--sysroot=${CHROOT} -B${TARGET_LIBDIR}/"
 TARGET_PKG_CONFIG_LIBDIR="${TARGET_LIBDIR}/pkgconfig:${CHROOT}/usr/lib/pkgconfig:${CHROOT}/usr/share/pkgconfig"
 
+. scripts/build-host.sh
+
+BUILD_HOST_ARCHITECTURE=$(detect_build_host_architecture)
+require_supported_build_host_architecture "${BUILD_HOST_ARCHITECTURE}"
+ROOTFS_BOOTSTRAP_MODE=$(build_host_rootfs_mode "${BUILD_HOST_ARCHITECTURE}")
+
+printf 'Build host architecture: %s (%s rootfs chroot)\n' \
+    "${BUILD_HOST_ARCHITECTURE}" "${ROOTFS_BOOTSTRAP_MODE}"
+
 # install gt dependencies
-chroot "${CHROOT}" qemu-aarch64-static /bin/sh \
-    -c " apt update; apt install libc6-dev libconfig-dev -y"
+case "${ROOTFS_BOOTSTRAP_MODE}" in
+    foreign)
+        chroot "${CHROOT}" qemu-aarch64-static /bin/sh \
+            -c "apt update; apt install libc6-dev libconfig-dev -y"
+        ;;
+    native)
+        chroot "${CHROOT}" /bin/sh \
+            -c "apt update; apt install libc6-dev libconfig-dev -y"
+        ;;
+esac
 
 # build and install gt
 (
