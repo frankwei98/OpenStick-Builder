@@ -2,10 +2,12 @@
 
 CHROOT=${CHROOT=$(pwd)/rootfs}
 SRCDIR=$(pwd)/src
+TARGET_LIBDIR=${CHROOT}/usr/lib/aarch64-linux-gnu
+TARGET_CFLAGS="--sysroot=${CHROOT} -B${TARGET_LIBDIR}/"
 
 # install gt dependencies
 chroot ${CHROOT} qemu-aarch64-static /bin/sh \
-    -c " apt update; apt install libconfig-dev -y"
+    -c " apt update; apt install libc6-dev libconfig-dev -y"
 
 # build and install gt
 (
@@ -16,22 +18,24 @@ autoreconf -i
 mkdir -p build
 (
 cd build
-PKG_CONFIG_PATH=${CHROOT}/usr/lib/aarch64-linux-gnu/pkgconfig \
+CC=aarch64-linux-gnu-gcc \
+CFLAGS="${TARGET_CFLAGS}" \
+PKG_CONFIG_PATH=${TARGET_LIBDIR}/pkgconfig \
     ${SRCDIR}/libusbgx/configure \
         --host aarch64-linux-gnu \
         --prefix=/usr \
         --with-sysroot=${CHROOT}
 )
-make -C build DESTDIR=$(pwd)/dist CFLAGS="--sysroot=${CHROOT}" install
-make -C build CFLAGS="--sysroot=${CHROOT}" install
+make -C build DESTDIR=$(pwd)/dist install
+make -C build install
 
 rm -rf build/*
-PKG_CONFIG_PATH=${CHROOT}/usr/lib/pkgconfig:${CHROOT}/usr/lib/aarch64-linux-gnu/pkgconfig \
+PKG_CONFIG_PATH=${CHROOT}/usr/lib/pkgconfig:${TARGET_LIBDIR}/pkgconfig \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
         -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-        -DCMAKE_C_FLAGS=-I$(pwd)/dist/usr/include \
-        -DCMAKE_C_FLAGS=-L$(pwd)/dist/usr/lib \
+        -DCMAKE_C_FLAGS="-B${TARGET_LIBDIR}/ -I$(pwd)/dist/usr/include -L$(pwd)/dist/usr/lib" \
+        -DCMAKE_CXX_FLAGS="-B${TARGET_LIBDIR}/ -I$(pwd)/dist/usr/include -L$(pwd)/dist/usr/lib" \
         -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
         -DCMAKE_SYSROOT=${CHROOT} \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
