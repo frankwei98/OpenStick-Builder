@@ -12,6 +12,11 @@ jobs:
         with:
           submodules: true
 
+      - name: Run OpenStick regression tests
+        run: |
+          tests/test-image-configuration.sh
+          tests/test-openstick-modem-isolate.sh
+
       - name: Install dependencies
         run: sudo sh -e scripts/install_deps.sh
 
