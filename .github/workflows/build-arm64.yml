@@ -2,11 +2,6 @@ name: Build ARM64 Native
 
 on:
   workflow_dispatch:
-  # Temporary pre-merge validation trigger. Remove after the ARM64 workflow
-  # has been registered on the default branch.
-  push:
-    branches:
-      - codex/arm64-native-builder
 
 jobs:
   build-arm64:
