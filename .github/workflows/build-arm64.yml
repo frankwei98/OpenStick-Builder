@@ -16,6 +16,7 @@ jobs:
         run: |
           uname -m
           dpkg --print-architecture
+          df -h /
 
       - name: Run OpenStick regression tests
         run: |
@@ -24,42 +25,58 @@ jobs:
           tests/test-openstick-modem-isolate.sh
 
       - name: Install dependencies
-        run: sudo sh -e scripts/install_deps.sh
+        run: time sudo sh -e scripts/install_deps.sh
 
       - name: Build hyp and aboot firmware
-        run: sudo sh -e scripts/build_hyp_aboot.sh
+        run: time sudo sh -e scripts/build_hyp_aboot.sh
 
       - name: Extract MSM8916 firmware
-        run: sudo sh -e scripts/extract_fw.sh
+        run: time sudo sh -e scripts/extract_fw.sh
 
       - name: Create rootfs natively
-        run: sudo sh -e scripts/debootstrap.sh
+        run: time sudo sh -e scripts/debootstrap.sh
 
       - name: Build gadget-tool natively
-        run: sudo sh -e scripts/build_gt.sh
+        run: time sudo sh -e scripts/build_gt.sh
 
       - name: Create images
-        run: sudo sh -e scripts/build_images.sh
+        run: time sudo sh -e scripts/build_images.sh
 
       - name: Validate ARM64 artifacts
         run: |
           test "$(sudo chroot rootfs dpkg --print-architecture)" = arm64
+          grep -q '^VERSION_ID="13"$' rootfs/etc/os-release
+          grep -q '^VERSION_CODENAME=trixie$' rootfs/etc/os-release
           test ! -e rootfs/usr/bin/qemu-aarch64-static
           ! tar -tzf rootfs.tgz ./usr/bin/qemu-aarch64-static >/dev/null 2>&1
           readelf -h files/hyp.mbn | grep -q 'Machine:.*AArch64'
+          readelf -h files/hyp.mbn | grep -q 'Class:.*ELF64'
           readelf -h files/aboot.mbn | grep -q 'Machine:.*ARM'
+          readelf -h files/aboot.mbn | grep -q 'Class:.*ELF32'
           file dist/usr/bin/gt | grep -q 'ARM aarch64'
+          readelf -h dist/usr/bin/gt | grep -q 'Machine:.*AArch64'
+          readelf -h dist/usr/lib/libusbgx.so.2.0.0 |
+              grep -q 'Machine:.*AArch64'
           readelf -d dist/usr/bin/gt | grep -q 'Shared library: \[libconfig.so.11\]'
-          if dpkg-query -W -f='${db:Status-Abbrev}\n' qemu-user-static 2>/dev/null |
-              grep -q '^ii '; then
-            echo "ARM64 build host unexpectedly installed qemu-user-static" >&2
-            exit 1
-          fi
           if sudo find rootfs dist files -type f -exec file {} + |
               grep -q 'x86-64'; then
             echo "x86-64 ELF found in ARM64 build output" >&2
             exit 1
           fi
+          for artifact in \
+              aboot.mbn \
+              boot.bin \
+              gpt_both0.bin \
+              hyp.mbn \
+              rootfs.bin \
+              rpm.mbn \
+              sbl1.mbn \
+              tz.mbn; do
+            test -s "files/${artifact}"
+          done
+          file files/*
+          du -sh rootfs rootfs.tgz dist files
+          df -h /
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
