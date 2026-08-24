@@ -14,6 +14,8 @@ apt upgrade -qqy
 apt autoremove -qqy
 apt install -qqy --no-install-recommends \
     bridge-utils \
+    ca-certificates \
+    curl \
     dnsmasq \
     e2fsprogs \
     exfatprogs \
