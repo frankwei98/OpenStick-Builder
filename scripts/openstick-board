@@ -176,8 +176,21 @@ select_profile() {
 
     backup_current_profile || exit 1
     if ! apply_profile; then
-        restore_own_backup || true
-        printf 'Failed to select board profile; restored previous configuration\n' >&2
+        if restore_own_backup; then
+            printf 'Failed to select board profile; restored previous configuration\n' >&2
+        else
+            printf 'Failed to select board profile; automatic restoration also failed\n' >&2
+            printf 'Manual recovery required before rebooting\n' >&2
+            printf 'Restore extlinux configuration from %s to %s\n' \
+                "${CONFIG_BACKUP}" "${EXTLINUX_CONFIG}" >&2
+            if [ -r "${BOARD_BACKUP}" ]; then
+                printf 'Restore the board record from %s to %s\n' \
+                    "${BOARD_BACKUP}" "${BOARD_FILE}" >&2
+            elif [ -e "${BOARD_MISSING_MARKER}" ]; then
+                printf 'Remove %s; it did not exist before selection\n' \
+                    "${BOARD_FILE}" >&2
+            fi
+        fi
         exit 1
     fi
 
