@@ -2,10 +2,22 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      board:
+        description: Optional preconfigured board profile
+        required: true
+        type: choice
+        default: generic
+        options:
+          - generic
+          - ufi003
+          - uz801
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      OPENSTICK_BOARD: ${{ inputs.board }}
 
     steps:
       - uses: actions/checkout@v4
@@ -17,18 +29,19 @@ jobs:
           tests/test-build-host-architecture.sh
           tests/test-image-configuration.sh
           tests/test-openstick-modem-isolate.sh
+          tests/test-openstick-board.sh
 
       - name: Install dependencies
         run: sudo sh -e scripts/install_deps.sh
 
       - name: Build hyp and aboot firmware
-        run: sudo sh -e scripts/build_hyp_aboot.sh
+        run: sudo --preserve-env=OPENSTICK_BOARD sh -e scripts/build_hyp_aboot.sh
 
       - name: Extract MSM8916 firmware
         run: sudo sh -e scripts/extract_fw.sh
 
       - name: Create rootfs
-        run: sudo sh -e scripts/debootstrap.sh
+        run: sudo --preserve-env=OPENSTICK_BOARD sh -e scripts/debootstrap.sh
 
       - name: Build gadget-tool
         run: sudo sh -e scripts/build_gt.sh
@@ -39,5 +52,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: openstick-debian
+          name: openstick-debian-${{ inputs.board }}
           path: files/*

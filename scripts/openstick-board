@@ -1,0 +1,397 @@
+#!/bin/sh
+
+OPENSTICK_ROOT=${OPENSTICK_ROOT:-}
+OPENSTICK_BOARD_LIB=${OPENSTICK_BOARD_LIB:-/usr/local/lib/openstick/board-profile.sh}
+OPENSTICK_MMCLI=${OPENSTICK_MMCLI:-mmcli}
+OPENSTICK_NMCLI=${OPENSTICK_NMCLI:-nmcli}
+OPENSTICK_TIMEOUT=${OPENSTICK_TIMEOUT:-timeout}
+
+case "${OPENSTICK_ROOT}" in
+    ""|/*) ;;
+    *)
+        printf 'OPENSTICK_ROOT must be empty or an absolute path\n' >&2
+        exit 2
+        ;;
+esac
+
+if [ ! -r "${OPENSTICK_BOARD_LIB}" ]; then
+    printf 'OpenStick board library is not readable: %s\n' \
+        "${OPENSTICK_BOARD_LIB}" >&2
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+. "${OPENSTICK_BOARD_LIB}"
+
+EXTLINUX_CONFIG=${OPENSTICK_EXTLINUX_CONFIG:-${OPENSTICK_ROOT}/boot/extlinux/extlinux.conf}
+BOARD_FILE=${OPENSTICK_BOARD_FILE:-${OPENSTICK_ROOT}/etc/openstick-board}
+ACTIVE_COMPATIBLE=${OPENSTICK_ACTIVE_COMPATIBLE:-${OPENSTICK_ROOT}/proc/device-tree/compatible}
+CONFIG_BACKUP=${OPENSTICK_CONFIG_BACKUP:-${EXTLINUX_CONFIG}.openstick-board-backup}
+BOARD_BACKUP=${OPENSTICK_BOARD_BACKUP:-${BOARD_FILE}.openstick-board-backup}
+BOARD_MISSING_MARKER=${BOARD_BACKUP}.missing
+LEGACY_CONFIG_BACKUP=${EXTLINUX_CONFIG}.before-ufi-sim
+
+usage() {
+    cat <<'EOF'
+Usage:
+  openstick-board status
+  openstick-board sim-status
+  openstick-board list
+  openstick-board select <profile>
+  openstick-board rollback
+EOF
+}
+
+require_admin() {
+    if [ -z "${OPENSTICK_ROOT}" ] && [ "$(id -u)" -ne 0 ]; then
+        printf 'This operation must be run as root\n' >&2
+        exit 1
+    fi
+}
+
+current_fdt() {
+    if [ -r "${EXTLINUX_CONFIG}" ]; then
+        sed -n 's/^[[:space:]]*fdt[[:space:]]*//p' \
+            "${EXTLINUX_CONFIG}" | head -n 1
+    fi
+}
+
+profile_dtb_path() {
+    printf '/dtbs/qcom/%s\n' "${OPENSTICK_PROFILE_DTB}"
+}
+
+validate_profile_target() {
+    openstick_target_dtb=${OPENSTICK_ROOT}/boot/dtbs/qcom/${OPENSTICK_PROFILE_DTB}
+    if [ ! -r "${openstick_target_dtb}" ]; then
+        printf 'DTB is not installed: %s\n' "${openstick_target_dtb}" >&2
+        return 1
+    fi
+
+    if [ ! -r "${EXTLINUX_CONFIG}" ]; then
+        printf 'extlinux configuration is not readable: %s\n' \
+            "${EXTLINUX_CONFIG}" >&2
+        return 1
+    fi
+
+    openstick_fdt_count=$(grep -c '^[[:space:]]*fdt[[:space:]]' \
+        "${EXTLINUX_CONFIG}" || true)
+    if [ "${openstick_fdt_count}" -ne 1 ]; then
+        printf 'Expected exactly one fdt entry in %s, found %s\n' \
+            "${EXTLINUX_CONFIG}" "${openstick_fdt_count}" >&2
+        return 1
+    fi
+}
+
+write_extlinux_profile() {
+    openstick_dtb_path=$(profile_dtb_path)
+    openstick_extlinux_tmp=$(mktemp "${EXTLINUX_CONFIG}.openstick-board.XXXXXX") ||
+        return 1
+
+    if ! sed \
+        "s|^[[:space:]]*fdt[[:space:]].*$|fdt ${openstick_dtb_path}|" \
+        "${EXTLINUX_CONFIG}" > "${openstick_extlinux_tmp}"; then
+        rm -f "${openstick_extlinux_tmp}"
+        return 1
+    fi
+
+    if ! grep -Fqx "fdt ${openstick_dtb_path}" "${openstick_extlinux_tmp}"; then
+        printf 'Failed to render the selected DTB into extlinux.conf\n' >&2
+        rm -f "${openstick_extlinux_tmp}"
+        return 1
+    fi
+
+    if ! chmod 0644 "${openstick_extlinux_tmp}" ||
+        ! mv "${openstick_extlinux_tmp}" "${EXTLINUX_CONFIG}"; then
+        rm -f "${openstick_extlinux_tmp}"
+        return 1
+    fi
+}
+
+write_board_record() {
+    openstick_board_dir=${BOARD_FILE%/*}
+    install -d -m 0755 "${openstick_board_dir}"
+    openstick_board_tmp=$(mktemp "${BOARD_FILE}.openstick-board.XXXXXX") ||
+        return 1
+    if ! printf '%s\n' "${OPENSTICK_PROFILE_ID}" > "${openstick_board_tmp}" ||
+        ! chmod 0644 "${openstick_board_tmp}" ||
+        ! mv "${openstick_board_tmp}" "${BOARD_FILE}"; then
+        rm -f "${openstick_board_tmp}"
+        return 1
+    fi
+}
+
+apply_profile() {
+    if ! write_extlinux_profile; then
+        return 1
+    fi
+    if ! write_board_record; then
+        return 1
+    fi
+}
+
+backup_current_profile() {
+    cp -p "${EXTLINUX_CONFIG}" "${CONFIG_BACKUP}" || return 1
+    rm -f "${BOARD_BACKUP}" "${BOARD_MISSING_MARKER}" || return 1
+    if [ -r "${BOARD_FILE}" ]; then
+        cp -p "${BOARD_FILE}" "${BOARD_BACKUP}" || return 1
+    else
+        : > "${BOARD_MISSING_MARKER}" || return 1
+    fi
+}
+
+restore_own_backup() {
+    cp -p "${CONFIG_BACKUP}" "${EXTLINUX_CONFIG}" || return 1
+    if [ -r "${BOARD_BACKUP}" ]; then
+        cp -p "${BOARD_BACKUP}" "${BOARD_FILE}" || return 1
+    elif [ -e "${BOARD_MISSING_MARKER}" ]; then
+        rm -f "${BOARD_FILE}" || return 1
+    fi
+}
+
+initialize_profile() {
+    require_admin
+    openstick_profile_load "$1" || exit 2
+    validate_profile_target || exit 1
+    apply_profile || exit 1
+    printf 'Initialized OpenStick board profile %s\n' \
+        "${OPENSTICK_PROFILE_LABEL}"
+}
+
+select_profile() {
+    require_admin
+    openstick_profile_load "$1" || exit 2
+    validate_profile_target || exit 1
+
+    openstick_selected_fdt=$(profile_dtb_path)
+    openstick_recorded_profile=
+    if [ -r "${BOARD_FILE}" ]; then
+        IFS= read -r openstick_recorded_profile < "${BOARD_FILE}" || true
+    fi
+    if [ "$(current_fdt)" = "${openstick_selected_fdt}" ] &&
+        [ "${openstick_recorded_profile}" = "${OPENSTICK_PROFILE_ID}" ]; then
+        printf 'Board profile %s is already selected\n' \
+            "${OPENSTICK_PROFILE_LABEL}"
+        return 0
+    fi
+
+    backup_current_profile || exit 1
+    if ! apply_profile; then
+        restore_own_backup || true
+        printf 'Failed to select board profile; restored previous configuration\n' >&2
+        exit 1
+    fi
+
+    printf 'Selected board profile %s (%s)\n' \
+        "${OPENSTICK_PROFILE_LABEL}" "${OPENSTICK_PROFILE_DTB}"
+    printf 'Reboot to activate the selected DTB\n'
+}
+
+rollback_profile() {
+    require_admin
+    if [ -r "${CONFIG_BACKUP}" ]; then
+        restore_own_backup || exit 1
+    elif [ -r "${LEGACY_CONFIG_BACKUP}" ]; then
+        cp -p "${LEGACY_CONFIG_BACKUP}" "${EXTLINUX_CONFIG}" || exit 1
+        rm -f "${BOARD_FILE}" || exit 1
+    else
+        printf 'No OpenStick board configuration backup is available\n' >&2
+        exit 1
+    fi
+
+    printf 'Restored the previous board configuration\n'
+    printf 'Reboot to activate the restored DTB\n'
+}
+
+kv_value() {
+    openstick_kv_key=$1
+    printf '%s\n' "${MODEM_KEY_VALUES}" |
+        sed -n "s|^${openstick_kv_key}[[:space:]]*:[[:space:]]*||p" |
+        head -n 1
+}
+
+probe_modem() {
+    MODEM_ID=
+    MODEM_STATE=unavailable
+    MODEM_TECH=--
+    MODEM_SIGNAL=--
+    SIM_STATE=unavailable
+    MODEM_KEY_VALUES=
+
+    if ! openstick_modem_list=$(
+        "${OPENSTICK_TIMEOUT}" 3 "${OPENSTICK_MMCLI}" -L 2>/dev/null
+    ); then
+        return 0
+    fi
+
+    MODEM_ID=$(printf '%s\n' "${openstick_modem_list}" |
+        sed -n 's|.*Modem/\([0-9][0-9]*\).*|\1|p' | head -n 1)
+    if [ -z "${MODEM_ID}" ]; then
+        SIM_STATE=missing
+        return 0
+    fi
+
+    if ! MODEM_KEY_VALUES=$(
+        "${OPENSTICK_TIMEOUT}" 5 "${OPENSTICK_MMCLI}" \
+            -m "${MODEM_ID}" --output-keyvalue 2>/dev/null
+    ); then
+        return 0
+    fi
+
+    openstick_value=$(kv_value 'modem.generic.state')
+    [ -z "${openstick_value}" ] || MODEM_STATE=${openstick_value}
+
+    openstick_value=$(kv_value 'modem.generic.access-technologies.value\[1\]')
+    if [ -n "${openstick_value}" ]; then
+        MODEM_TECH=$(printf '%s' "${openstick_value}" |
+            tr '[:lower:]' '[:upper:]')
+    fi
+
+    openstick_value=$(kv_value 'modem.generic.signal-quality.value')
+    [ -z "${openstick_value}" ] || MODEM_SIGNAL=${openstick_value}
+
+    openstick_sim=$(kv_value 'modem.generic.sim')
+    case "${openstick_sim}" in
+        ""|--) SIM_STATE=missing ;;
+        *) SIM_STATE=present ;;
+    esac
+}
+
+cellular_data_state() {
+    if ! openstick_active_types=$(
+        "${OPENSTICK_TIMEOUT}" 3 "${OPENSTICK_NMCLI}" \
+            -t -f TYPE connection show --active 2>/dev/null
+    ); then
+        printf 'unknown\n'
+        return
+    fi
+
+    if printf '%s\n' "${openstick_active_types}" | grep -Fqx gsm; then
+        printf 'enabled\n'
+    else
+        printf 'disabled\n'
+    fi
+}
+
+wifi_state() {
+    if ! openstick_devices=$(
+        "${OPENSTICK_TIMEOUT}" 3 "${OPENSTICK_NMCLI}" \
+            -t -f DEVICE,TYPE,STATE device status 2>/dev/null
+    ); then
+        printf 'unknown\n'
+        return
+    fi
+
+    openstick_wifi_line=$(printf '%s\n' "${openstick_devices}" |
+        sed -n '/:wifi:connected$/p' | head -n 1)
+    if [ -z "${openstick_wifi_line}" ]; then
+        printf 'disconnected\n'
+        return
+    fi
+
+    openstick_wifi_device=${openstick_wifi_line%%:*}
+    openstick_wifi_address=$(
+        "${OPENSTICK_TIMEOUT}" 3 "${OPENSTICK_NMCLI}" \
+            -g IP4.ADDRESS device show "${openstick_wifi_device}" 2>/dev/null |
+            head -n 1
+    ) || openstick_wifi_address=
+    openstick_wifi_address=${openstick_wifi_address%%/*}
+
+    if [ -n "${openstick_wifi_address}" ]; then
+        printf 'connected / %s\n' "${openstick_wifi_address}"
+    else
+        printf 'connected\n'
+    fi
+}
+
+print_status() {
+    openstick_board_label=UNCONFIGURED
+    openstick_board_unconfigured=1
+    openstick_expected_fdt=
+    openstick_expected_compatible=
+    if [ -r "${BOARD_FILE}" ]; then
+        IFS= read -r openstick_recorded_board < "${BOARD_FILE}" || true
+        if openstick_profile_load "${openstick_recorded_board}" 2>/dev/null; then
+            openstick_board_label=${OPENSTICK_PROFILE_LABEL}
+            openstick_board_unconfigured=0
+            openstick_expected_fdt=$(profile_dtb_path)
+            openstick_expected_compatible=${OPENSTICK_PROFILE_COMPATIBLE}
+        else
+            openstick_board_label="<invalid: ${openstick_recorded_board}>"
+        fi
+    fi
+
+    openstick_fdt=$(current_fdt)
+    openstick_fdt_name=${openstick_fdt##*/}
+    [ -n "${openstick_fdt_name}" ] || openstick_fdt_name='<missing>'
+
+    probe_modem
+    openstick_cellular_state=$(cellular_data_state)
+    openstick_wifi_state=$(wifi_state)
+
+    printf '[OpenStick]\n'
+    printf 'Board profile : %s\n' "${openstick_board_label}"
+    printf 'DTB           : %s\n' "${openstick_fdt_name}"
+    printf 'SIM           : %s\n' "${SIM_STATE}"
+    if [ "${MODEM_SIGNAL}" = "--" ]; then
+        printf 'Network       : %s / %s\n' "${MODEM_STATE}" "${MODEM_TECH}"
+    else
+        printf 'Network       : %s / %s / signal %s%%\n' \
+            "${MODEM_STATE}" "${MODEM_TECH}" "${MODEM_SIGNAL}"
+    fi
+    printf 'Cellular data : %s\n' "${openstick_cellular_state}"
+    printf 'Wi-Fi         : %s\n' "${openstick_wifi_state}"
+
+    if [ "${openstick_board_unconfigured}" -eq 1 ]; then
+        printf 'Warning       : select ufi003 or uz801, then reboot if requested\n'
+    elif [ -n "${openstick_expected_fdt}" ] &&
+        [ "${openstick_fdt}" != "${openstick_expected_fdt}" ]; then
+        printf 'Warning       : recorded board profile and extlinux DTB disagree\n'
+    elif [ -n "${openstick_expected_compatible}" ] &&
+        [ -r "${ACTIVE_COMPATIBLE}" ] &&
+        ! tr '\000' '\n' < "${ACTIVE_COMPATIBLE}" |
+            grep -Fqx "${openstick_expected_compatible}"; then
+        printf 'Warning       : selected DTB is not active; reboot required\n'
+    fi
+}
+
+print_sim_status() {
+    probe_modem
+    printf 'Modem         : %s\n' "${MODEM_ID:---}"
+    printf 'SIM           : %s\n' "${SIM_STATE}"
+    printf 'Registration  : %s\n' "${MODEM_STATE}"
+    printf 'Access        : %s\n' "${MODEM_TECH}"
+    if [ "${MODEM_SIGNAL}" = "--" ]; then
+        printf 'Signal        : --\n'
+    else
+        printf 'Signal        : %s%%\n' "${MODEM_SIGNAL}"
+    fi
+}
+
+command=${1:-}
+case "${command}" in
+    status)
+        print_status
+        ;;
+    sim-status)
+        print_sim_status
+        ;;
+    list)
+        openstick_profile_list
+        ;;
+    initialize)
+        [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+        initialize_profile "$2"
+        ;;
+    select)
+        [ "$#" -eq 2 ] || { usage >&2; exit 2; }
+        select_profile "$2"
+        ;;
+    rollback)
+        [ "$#" -eq 1 ] || { usage >&2; exit 2; }
+        rollback_profile
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac

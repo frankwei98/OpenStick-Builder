@@ -1,0 +1,3 @@
+# profile|kernel dtb|lk1st compatible|display name
+ufi003|msm8916-thwc-ufi001c.dtb|thwc,ufi001c|UFI003
+uz801|msm8916-yiming-uz801v3.dtb|yiming,uz801-v3|UZ801
