@@ -4,8 +4,15 @@ CHROOT=${CHROOT=$(pwd)/rootfs}
 RELEASE=${RELEASE=trixie}
 DEBOOTSTRAP_KEYRING=${DEBOOTSTRAP_KEYRING=$(pwd)/build/debian-archive-keyring.gpg}
 HOST_NAME=${HOST_NAME=openstick-debian}
+OPENSTICK_BOARD_PROFILES=${OPENSTICK_BOARD_PROFILES:-configs/openstick-board-profiles}
+export OPENSTICK_BOARD_PROFILES
 
+# shellcheck disable=SC1091
 . scripts/build-host.sh
+# shellcheck disable=SC1091
+. scripts/openstick-board-profile.sh
+
+openstick_build_profile_load "${OPENSTICK_BOARD:-generic}"
 
 BUILD_HOST_ARCHITECTURE=$(detect_build_host_architecture)
 require_supported_build_host_architecture "${BUILD_HOST_ARCHITECTURE}"
@@ -127,6 +134,14 @@ install -D -m 0644 configs/openstick-modem-isolation.conf \
     "${CHROOT}/etc/default/openstick-modem-isolation"
 install -D -m 0644 configs/udev/80-openstick-modem-isolation.rules \
     "${CHROOT}/etc/udev/rules.d/80-openstick-modem-isolation.rules"
+install -D -m 0755 scripts/openstick-board \
+    "${CHROOT}/usr/local/sbin/openstick-board"
+install -D -m 0644 scripts/openstick-board-profile.sh \
+    "${CHROOT}/usr/local/lib/openstick/board-profile.sh"
+install -D -m 0644 configs/openstick-board-profiles \
+    "${CHROOT}/usr/local/share/openstick/board-profiles"
+install -D -m 0644 configs/profile.d/openstick-status.sh \
+    "${CHROOT}/etc/profile.d/openstick-status.sh"
 
 mkdir -p \
     "${CHROOT}/etc/systemd/system/multi-user.target.wants" \
@@ -159,6 +174,15 @@ cp configs/extlinux.conf "${CHROOT}/boot/extlinux"
 
 # copy custom dtb's
 cp dtbs/* "${CHROOT}/boot/dtbs/qcom"
+
+if [ "${OPENSTICK_BUILD_PROFILE}" = generic ]; then
+    printf 'Leaving board profile unconfigured for post-flash selection\n'
+else
+    OPENSTICK_ROOT="${CHROOT}" \
+    OPENSTICK_BOARD_LIB=scripts/openstick-board-profile.sh \
+    OPENSTICK_BOARD_PROFILES=configs/openstick-board-profiles \
+        scripts/openstick-board initialize "${OPENSTICK_BUILD_PROFILE}"
+fi
 
 # create missing directory
 mkdir -p "${CHROOT}/lib/firmware/msm-firmware-loader"

@@ -2,10 +2,22 @@ name: Build ARM64 Native
 
 on:
   workflow_dispatch:
+    inputs:
+      board:
+        description: Optional preconfigured board profile
+        required: true
+        type: choice
+        default: generic
+        options:
+          - generic
+          - ufi003
+          - uz801
 
 jobs:
   build-arm64:
     runs-on: ubuntu-24.04-arm
+    env:
+      OPENSTICK_BOARD: ${{ inputs.board }}
 
     steps:
       - uses: actions/checkout@v4
@@ -23,18 +35,19 @@ jobs:
           tests/test-build-host-architecture.sh
           tests/test-image-configuration.sh
           tests/test-openstick-modem-isolate.sh
+          tests/test-openstick-board.sh
 
       - name: Install dependencies
         run: time sudo sh -e scripts/install_deps.sh
 
       - name: Build hyp and aboot firmware
-        run: time sudo sh -e scripts/build_hyp_aboot.sh
+        run: time sudo --preserve-env=OPENSTICK_BOARD sh -e scripts/build_hyp_aboot.sh
 
       - name: Extract MSM8916 firmware
         run: time sudo sh -e scripts/extract_fw.sh
 
       - name: Create rootfs natively
-        run: time sudo sh -e scripts/debootstrap.sh
+        run: time sudo --preserve-env=OPENSTICK_BOARD sh -e scripts/debootstrap.sh
 
       - name: Build gadget-tool natively
         run: time sudo sh -e scripts/build_gt.sh
@@ -81,5 +94,5 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: openstick-debian-arm64
+          name: openstick-debian-arm64-${{ inputs.board }}
           path: files/*

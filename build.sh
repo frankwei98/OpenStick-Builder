@@ -1,19 +1,36 @@
 #!/bin/sh -e
 
-echo "Install dependencies\n"
+OPENSTICK_BOARD_PROFILES=${OPENSTICK_BOARD_PROFILES:-configs/openstick-board-profiles}
+export OPENSTICK_BOARD_PROFILES
+# shellcheck source=scripts/openstick-board-profile.sh
+. scripts/openstick-board-profile.sh
+
+OPENSTICK_BOARD=${OPENSTICK_BOARD:-generic}
+openstick_build_profile_load "${OPENSTICK_BOARD}"
+OPENSTICK_BOARD=${OPENSTICK_BUILD_PROFILE}
+export OPENSTICK_BOARD
+
+if [ "${OPENSTICK_BOARD}" = generic ]; then
+    printf 'Building generic image (board selected after flashing)\n\n'
+else
+    printf 'Building preconfigured image for %s\n\n' \
+        "${OPENSTICK_PROFILE_LABEL}"
+fi
+
+printf 'Install dependencies\n\n'
 scripts/install_deps.sh
 
-echo "\nBuild hyp and aboot firmware\n"
+printf '\nBuild hyp and aboot firmware\n\n'
 scripts/build_hyp_aboot.sh
 
-echo "\nExtract MSM8916 firmware\n"
+printf '\nExtract MSM8916 firmware\n\n'
 scripts/extract_fw.sh
 
-echo "\nCreate rootfs\n"
+printf '\nCreate rootfs\n\n'
 scripts/debootstrap.sh
 
-echo "\nBuild gadget-tools\n"
+printf '\nBuild gadget-tools\n\n'
 scripts/build_gt.sh
 
-echo "\nCreate images\n"
+printf '\nCreate images\n\n'
 scripts/build_images.sh

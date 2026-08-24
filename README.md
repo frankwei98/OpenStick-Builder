@@ -21,6 +21,18 @@ unsupported architectures. The AMD64 path remains available as a compatibility
 fallback, while the ARM64-native path avoids emulation during package
 configuration and is substantially faster.
 
+By default the builder creates a generic image and the user selects the physical
+board after flashing. The generic image uses the historical UZ801 DTB only as a
+bootable management fallback; it deliberately leaves `/etc/openstick-board`
+absent and reports the board as `UNCONFIGURED` until the user selects one.
+
+The supported board profiles are:
+
+| Profile | Hardware | DTB |
+| --- | --- | --- |
+| `ufi003` | UFI003 and compatible UFI001B/UFI001C sticks | `msm8916-thwc-ufi001c.dtb` |
+| `uz801` | Yiming UZ801 v3 | `msm8916-yiming-uz801v3.dtb` |
+
 - clone
   ```shell
   git clone --recurse-submodules https://github.com/kinsamanka/OpenStick-Builder.git
@@ -31,6 +43,13 @@ configuration and is substantially faster.
   ```shell
   cd OpenStick-Builder/
   sudo ./build.sh
+  ```
+
+  To create an image that is already configured for one board, set the optional
+  build profile:
+
+  ```shell
+  sudo env OPENSTICK_BOARD=ufi003 ./build.sh
   ```
 #### Detailed
 - install dependencies
@@ -72,7 +91,8 @@ The generated firmware files will be stored under the `files` directory.
      compatibility path.
    - [Build ARM64 Native](../../actions/workflows/build-arm64.yml) uses an
      Ubuntu 24.04 ARM64 runner and builds the ARM64 rootfs natively.
-3. Click ***Run workflow***.
+3. Click ***Run workflow***. Leave the board profile as `generic` for
+   post-flash selection, or choose a board to create a preconfigured image.
 4. Once the workflow is done, open its summary and download the resulting
    artifact.
 
@@ -164,16 +184,46 @@ Edit [`scripts/setup.sh`](scripts/setup.sh) to add/remove packages. Note that th
   | username | user |
   | password | 1 |
  
-- If your device is not based on **UZ801**, modify `/boot/extlinux/extlinux.conf` to use the correct devicetree
+- Show the recorded board, configured DTB, SIM registration, cellular-data
+  state, and Wi-Fi address:
+
   ```shell
-  sed -i 's/yiming-uz801v3/<BOARD>/' /boot/extlinux/extlinux.conf
+  /usr/local/sbin/openstick-board status
   ```
 
-  where `<BOARD>` is
-     - `thwc-uf896` for **UF896** boards
-     - `thwc-ufi001c` for **UFIxxx** boards
-     - `jz01-45-v33` for **JZxxx** boards
-     - `fy-mf800` for **MF800** boards
+  A newly flashed generic image reports `Board profile : UNCONFIGURED`. The DTB
+  shown at this point is only the boot fallback and is not a hardware detection
+  result.
+
+- Select the physical board after flashing:
+
+  ```shell
+  sudo /usr/local/sbin/openstick-board select ufi003
+  sudo reboot
+  ```
+
+  Use `uz801` instead for a Yiming UZ801 v3. The selector records the physical
+  board in `/etc/openstick-board`, validates that the requested DTB is installed,
+  and backs up the previous configuration. Reboot when the command requests it.
+  To undo the last selection:
+
+  ```shell
+  sudo /usr/local/sbin/openstick-board rollback
+  sudo reboot
+  ```
+
+  `/proc/device-tree/model` and `/proc/device-tree/compatible` describe the DTB
+  that was already selected; they cannot prove the physical board model. For
+  that reason the builder requires an explicit profile and stores it in
+  `/etc/openstick-board`.
+
+- Interactive SSH and serial shells show the same bounded status summary at
+  login. Non-interactive SSH commands, SCP, and rsync do not receive this
+  output. To query only the modem and SIM:
+
+  ```shell
+  /usr/local/sbin/openstick-board sim-status
+  ```
 
 - To maximize the `rootfs` partition
   ```shell
