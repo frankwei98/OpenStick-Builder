@@ -93,6 +93,8 @@ run_board() {
     OPENSTICK_ROOT="${ROOTFS}" \
     OPENSTICK_BOARD_LIB="${REPO_ROOT}/scripts/openstick-board-profile.sh" \
     OPENSTICK_BOARD_PROFILES="${REPO_ROOT}/configs/openstick-board-profiles" \
+    OPENSTICK_CONFIG_BACKUP="${OPENSTICK_CONFIG_BACKUP:-}" \
+    OPENSTICK_BOARD_BACKUP="${OPENSTICK_BOARD_BACKUP:-}" \
     OPENSTICK_MMCLI="${MMCLI_STUB}" \
     OPENSTICK_NMCLI="${NMCLI_STUB}" \
     MMCLI_LOG="${MMCLI_LOG}" \
@@ -112,6 +114,52 @@ run_board initialize ufi003
 grep -qx 'fdt /dtbs/qcom/msm8916-thwc-ufi001c.dtb' \
     "${EXTLINUX_CONFIG}"
 grep -qx 'ufi003' "${ROOTFS}/etc/openstick-board"
+
+CONFIG_BACKUP_OVERRIDE="${TEST_ROOT}/extlinux.backup"
+BOARD_BACKUP_OVERRIDE="${TEST_ROOT}/board.backup"
+chmod 0555 "${ROOTFS}/boot/extlinux"
+if recovery_output=$(
+    OPENSTICK_CONFIG_BACKUP="${CONFIG_BACKUP_OVERRIDE}" \
+    OPENSTICK_BOARD_BACKUP="${BOARD_BACKUP_OVERRIDE}" \
+        run_board select uz801 2>&1
+); then
+    chmod 0755 "${ROOTFS}/boot/extlinux"
+    echo "board selection unexpectedly succeeded with an unwritable boot directory" >&2
+    exit 1
+fi
+chmod 0755 "${ROOTFS}/boot/extlinux"
+grep -Fqx \
+    'Failed to select board profile; restored previous configuration' \
+    <<< "${recovery_output}"
+if grep -Fq 'Manual recovery required' <<< "${recovery_output}"; then
+    echo "successful automatic restoration requested manual recovery" >&2
+    exit 1
+fi
+
+chmod 0444 "${EXTLINUX_CONFIG}"
+chmod 0555 "${ROOTFS}/boot/extlinux"
+if recovery_failure_output=$(
+    OPENSTICK_CONFIG_BACKUP="${CONFIG_BACKUP_OVERRIDE}" \
+    OPENSTICK_BOARD_BACKUP="${BOARD_BACKUP_OVERRIDE}" \
+        run_board select uz801 2>&1
+); then
+    chmod 0755 "${ROOTFS}/boot/extlinux"
+    chmod 0644 "${EXTLINUX_CONFIG}"
+    echo "board selection unexpectedly succeeded when restoration was blocked" >&2
+    exit 1
+fi
+chmod 0755 "${ROOTFS}/boot/extlinux"
+chmod 0644 "${EXTLINUX_CONFIG}"
+grep -Fqx \
+    'Failed to select board profile; automatic restoration also failed' \
+    <<< "${recovery_failure_output}"
+grep -Fq 'Manual recovery required before rebooting' \
+    <<< "${recovery_failure_output}"
+if grep -Fq 'restored previous configuration' \
+    <<< "${recovery_failure_output}"; then
+    echo "failed automatic restoration was reported as successful" >&2
+    exit 1
+fi
 
 run_board select uz801 >/dev/null
 grep -qx 'fdt /dtbs/qcom/msm8916-yiming-uz801v3.dtb' \
