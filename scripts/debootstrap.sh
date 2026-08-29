@@ -239,7 +239,8 @@ ln -sf /dev/null "${CHROOT}/etc/systemd/system/dnsmasq.service"
 
 # Install a pinned, verified kernel package only after the chroot mounts have
 # been released. The installer stages and validates the package before copying.
-scripts/install-kernel.sh "${CHROOT}" configs/postmarketos-kernel.conf
+scripts/install-kernel.sh "${CHROOT}" configs/postmarketos-kernel.conf \
+    --discard-rootfs-on-merge-failure
 
 mkdir -p "${CHROOT}/boot/extlinux"
 cp configs/extlinux.conf "${CHROOT}/boot/extlinux"

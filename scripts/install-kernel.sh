@@ -3,6 +3,16 @@ set -eu
 
 ROOTFS=${1:-}
 KERNEL_CONFIG=${2:-}
+failure_policy=${3:-}
+
+case "${failure_policy}" in
+    '') discard_rootfs_on_merge_failure=0 ;;
+    --discard-rootfs-on-merge-failure) discard_rootfs_on_merge_failure=1 ;;
+    *)
+        echo "Unknown kernel install failure policy: ${failure_policy}" >&2
+        exit 1
+        ;;
+esac
 
 if [ -z "${ROOTFS}" ] || [ ! -d "${ROOTFS}" ]; then
     echo "Kernel install rootfs is not a directory: ${ROOTFS}" >&2
@@ -12,6 +22,31 @@ ROOTFS_REAL=$(cd -P "${ROOTFS}" && pwd -P)
 if [ "${ROOTFS_REAL}" = / ]; then
     echo "Refusing to install a kernel into /" >&2
     exit 1
+fi
+
+rootfs_is_unmounted() {
+    if ! command -v findmnt >/dev/null 2>&1; then
+        echo "Unable to verify kernel install rootfs mounts: findmnt is unavailable" >&2
+        return 1
+    fi
+    if ! active_mounts=$(findmnt -rn -o TARGET 2>/dev/null); then
+        echo "Unable to inspect active mounts" >&2
+        return 1
+    fi
+    if printf '%s\n' "${active_mounts}" |
+        awk -v rootfs="${ROOTFS_REAL}" \
+            '$0 == rootfs || index($0, rootfs "/") == 1 {
+                found = 1
+            }
+            END { exit !found }
+            '; then
+        echo "Kernel install rootfs has an active mount: ${ROOTFS_REAL}" >&2
+        return 1
+    fi
+}
+
+if [ "${discard_rootfs_on_merge_failure}" -eq 1 ] && ! rootfs_is_unmounted; then
+    exit 2
 fi
 if [ -z "${KERNEL_CONFIG}" ] || [ ! -r "${KERNEL_CONFIG}" ]; then
     echo "Kernel package config is not readable: ${KERNEL_CONFIG}" >&2
@@ -67,12 +102,27 @@ WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/openstick-kernel.XXXXXX")
 PACKAGE_FILE="${WORK_DIR}/kernel.apk"
 PACKAGE_LIST="${WORK_DIR}/contents"
 STAGING_DIR="${WORK_DIR}/staging"
+merge_started=0
 
 cleanup_kernel_install() {
-    status=$1
+    cleanup_status=$1
     trap - EXIT HUP INT TERM
+
+    if [ "${cleanup_status}" -ne 0 ] && [ "${merge_started}" -eq 1 ] && \
+        [ "${discard_rootfs_on_merge_failure}" -eq 1 ]; then
+        if rootfs_is_unmounted; then
+            if ! rm -rf --one-file-system --preserve-root=all -- \
+                "${ROOTFS_REAL}"; then
+                echo "Unable to discard partially installed rootfs: ${ROOTFS_REAL}" >&2
+                cleanup_status=1
+            fi
+        else
+            echo "Refusing to discard partially installed mounted rootfs" >&2
+            cleanup_status=1
+        fi
+    fi
     rm -rf -- "${WORK_DIR}"
-    exit "${status}"
+    exit "${cleanup_status}"
 }
 
 trap 'cleanup_kernel_install $?' EXIT
@@ -197,6 +247,7 @@ for staged_path in \
     [ -e "${staged_path}" ] || [ -L "${staged_path}" ] || continue
     validate_staged_entry "${staged_path}" "${staged_path##*/}"
 done
+merge_started=1
 for staged_path in \
     "${STAGING_DIR}"/* \
     "${STAGING_DIR}"/.[!.]* \

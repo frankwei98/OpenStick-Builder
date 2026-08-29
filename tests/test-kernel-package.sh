@@ -207,4 +207,52 @@ if WGET_LOG="${WGET_LOG}" \
 fi
 test -z "$(find "${INCOMPLETE_ROOTFS}" -mindepth 1 -print -quit)"
 
+# The image builder marks its freshly generated rootfs as disposable. If a
+# copy fails after the merge starts, the installer must remove that rootfs
+# rather than leave a package that appears partly installed.
+DISCARD_ROOTFS="${TEST_ROOT}/discard-rootfs"
+FAIL_STUB_BIN="${TEST_ROOT}/fail-bin"
+mkdir -p "${DISCARD_ROOTFS}/boot" "${DISCARD_ROOTFS}/usr/lib" \
+    "${FAIL_STUB_BIN}"
+ln -s usr/lib "${DISCARD_ROOTFS}/lib"
+printf 'preexisting\n' > "${DISCARD_ROOTFS}/boot/preexisting"
+cp "${STUB_BIN}/wget" "${FAIL_STUB_BIN}/wget"
+cat > "${FAIL_STUB_BIN}/cp" <<'EOF'
+#!/bin/sh
+case "$*" in
+    *"/staging/lib/."*) exit 71 ;;
+esac
+exec /bin/cp "$@"
+EOF
+cat > "${FAIL_STUB_BIN}/findmnt" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+cat > "${FAIL_STUB_BIN}/rm" <<'EOF'
+#!/bin/sh
+case " $* " in
+    *" --one-file-system "*)
+        for argument do
+            target=${argument}
+        done
+        exec /bin/rm -rf -- "${target}"
+        ;;
+esac
+exec /bin/rm "$@"
+EOF
+chmod 0755 "${FAIL_STUB_BIN}"/*
+if WGET_LOG="${WGET_LOG}" \
+    FAKE_KERNEL_PACKAGE="${PACKAGE_FILE}" \
+    PATH="${FAIL_STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/install-kernel.sh" \
+            "${DISCARD_ROOTFS}" "${VALID_CONFIG}" \
+            --discard-rootfs-on-merge-failure >/dev/null 2>&1; then
+    echo "injected kernel merge failure unexpectedly succeeded" >&2
+    exit 1
+else
+    discard_status=$?
+fi
+test "${discard_status}" -eq 71
+test ! -e "${DISCARD_ROOTFS}"
+
 printf 'kernel package verification tests passed\n'
