@@ -226,6 +226,28 @@ if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
     exit 1
 fi
 rm "${BUILD_REPO}/files/unexpected.bin"
+
+# Artifact names must identify regular files produced inside files/. A symlink
+# to an external file must not satisfy a required artifact, and an unexpected
+# dangling symlink must not disappear from the exact-set check.
+mv "${BUILD_REPO}/files/aboot.mbn" "${TEST_ROOT}/external-aboot.mbn"
+ln -s "${TEST_ROOT}/external-aboot.mbn" \
+    "${BUILD_REPO}/files/aboot.mbn"
+if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
+    echo "artifact validation accepted a symlink as a build artifact" >&2
+    exit 1
+fi
+rm "${BUILD_REPO}/files/aboot.mbn"
+mv "${TEST_ROOT}/external-aboot.mbn" "${BUILD_REPO}/files/aboot.mbn"
+
+ln -s "${TEST_ROOT}/missing-artifact" \
+    "${BUILD_REPO}/files/unexpected-dangling"
+if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
+    echo "artifact validation ignored an unexpected dangling symlink" >&2
+    exit 1
+fi
+rm "${BUILD_REPO}/files/unexpected-dangling"
+
 (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null)
 test -s "${BUILD_REPO}/files/SHA256SUMS"
 test "$(wc -l < "${BUILD_REPO}/files/SHA256SUMS" | tr -d ' ')" -eq 8

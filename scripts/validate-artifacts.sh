@@ -24,14 +24,16 @@ rm -f -- "${ARTIFACT_DIR}/SHA256SUMS" \
 printf '%s\n' "${EXPECTED_ARTIFACTS}" |
     while IFS= read -r artifact_name; do
         [ -n "${artifact_name}" ] || continue
-        if [ ! -s "${ARTIFACT_DIR}/${artifact_name}" ]; then
-            echo "Missing or empty build artifact: ${artifact_name}" >&2
+        artifact_path="${ARTIFACT_DIR}/${artifact_name}"
+        if [ ! -f "${artifact_path}" ] || [ -L "${artifact_path}" ] || \
+            [ ! -s "${artifact_path}" ]; then
+            echo "Missing, empty, or non-regular build artifact: ${artifact_name}" >&2
             exit 1
         fi
     done
 
 for artifact_path in "${ARTIFACT_DIR}"/.[!.]* "${ARTIFACT_DIR}"/..?* "${ARTIFACT_DIR}"/*; do
-    [ -e "${artifact_path}" ] || continue
+    [ -e "${artifact_path}" ] || [ -L "${artifact_path}" ] || continue
     artifact_name=${artifact_path##*/}
     case "${artifact_name}" in
         aboot.mbn|boot.bin|gpt_both0.bin|hyp.mbn|rootfs.bin|rpm.mbn|sbl1.mbn|tz.mbn)
