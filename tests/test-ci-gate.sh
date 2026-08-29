@@ -14,8 +14,11 @@ grep -Eq '^  pull_request:$' "${WORKFLOW}"
 grep -Eq '^permissions:$' "${WORKFLOW}"
 grep -Eq '^  contents: read$' "${WORKFLOW}"
 grep -Eq '^          persist-credentials: false$' "${WORKFLOW}"
+# shellcheck disable=SC2016 # Match literal workflow variables below.
 grep -Fq 'case "${shebang}" in' "${WORKFLOW}"
+# shellcheck disable=SC2016
 grep -Fq '*bash*) bash -n "${script_path}" ;;' "${WORKFLOW}"
+# shellcheck disable=SC2016
 grep -Fq '*sh*) sh -n "${script_path}" ;;' "${WORKFLOW}"
 grep -Fq 'shellcheck -e SC1091' "${WORKFLOW}"
 grep -Fq 'for test_path in tests/test-*.sh; do' "${WORKFLOW}"
