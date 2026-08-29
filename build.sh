@@ -17,6 +17,9 @@ else
         "${OPENSTICK_PROFILE_LABEL}"
 fi
 
+printf 'Prepare clean build workspace\n\n'
+scripts/prepare-build.sh
+
 printf 'Install dependencies\n\n'
 scripts/install_deps.sh
 
@@ -34,3 +37,6 @@ scripts/build_gt.sh
 
 printf '\nCreate images\n\n'
 scripts/build_images.sh
+
+printf '\nValidate artifacts\n\n'
+scripts/validate-artifacts.sh

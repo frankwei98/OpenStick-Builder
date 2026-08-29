@@ -30,6 +30,11 @@ board after flashing. The generic image uses the historical UZ801 DTB only as a
 bootable management fallback; it deliberately leaves `/etc/openstick-board`
 absent and reports the board as `UNCONFIGURED` until the user selects one.
 
+`build.sh` starts from a clean set of disposable output directories. It refuses
+cleanup if an active mount exists below one of them, builds bootloader sources
+in a board-specific working copy, and finishes by writing `files/SHA256SUMS`
+only after the exact expected artifact set has been validated.
+
 The supported board profiles are:
 
 | Profile | Hardware | DTB |

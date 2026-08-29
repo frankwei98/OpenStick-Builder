@@ -19,11 +19,16 @@ download_bootloader() {
 trap 'cleanup $?' EXIT
 
 mkdir -p files
+rm -f -- \
+    files/gpt_both0.bin \
+    files/rpm.mbn \
+    files/sbl1.mbn \
+    files/tz.mbn
 
 # create GPT
-truncate -s 179323904 ${TMPDIR}/gpt.img
+truncate -s 179323904 "${TMPDIR}/gpt.img"
 
-cat << EOF | sfdisk ${TMPDIR}/gpt.img
+cat << EOF | sfdisk "${TMPDIR}/gpt.img"
 label: gpt
 label-id: DB708ACF-2E04-8DE2-BAFE-30C9B26444C5
 unit: sectors
@@ -49,10 +54,10 @@ EOF
 
 # create fastboot compatible partition image
 # primary gpt
-dd if=${TMPDIR}/gpt.img of=files/gpt_both0.bin bs=512 count=34
+dd if="${TMPDIR}/gpt.img" of=files/gpt_both0.bin bs=512 count=34
 # backup gpt
-dd if=${TMPDIR}/gpt.img bs=512 skip=2 count=32 >> files/gpt_both0.bin
-dd if=${TMPDIR}/gpt.img bs=512 skip=350241 >> files/gpt_both0.bin
+dd if="${TMPDIR}/gpt.img" bs=512 skip=2 count=32 >> files/gpt_both0.bin
+dd if="${TMPDIR}/gpt.img" bs=512 skip=350241 >> files/gpt_both0.bin
 
 # extract Qualcom firmware
 if ! download_bootloader "${BOOTLOADER_PRIMARY_URL}"; then
