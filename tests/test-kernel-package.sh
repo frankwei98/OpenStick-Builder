@@ -183,6 +183,61 @@ test -L "${NESTED_ESCAPE_ROOTFS}/boot/vmlinuz"
 test ! -e "${NESTED_ESCAPE_ROOTFS}/boot/dtbs"
 test ! -e "${NESTED_ESCAPE_ROOTFS}/lib"
 
+# Reject unsafe archive member paths before extraction or rootfs writes.
+UNSAFE_PACKAGE_FILE="${TEST_ROOT}/unsafe-kernel.apk"
+UNSAFE_ROOTFS="${TEST_ROOT}/unsafe-rootfs"
+UNSAFE_CONFIG="${TEST_ROOT}/unsafe.conf"
+printf 'unsafe\n' > "${PACKAGE_ROOT}/unsafe-marker"
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+    tar -czf "${UNSAFE_PACKAGE_FILE}" -C "${PACKAGE_ROOT}" \
+        --transform='s|^unsafe-marker$|../escape|' \
+        boot lib unsafe-marker
+else
+    tar -czf "${UNSAFE_PACKAGE_FILE}" -C "${PACKAGE_ROOT}" \
+        -s ',^unsafe-marker$,../escape,' boot lib unsafe-marker
+fi
+rm "${PACKAGE_ROOT}/unsafe-marker"
+UNSAFE_SHA256=$(sha256sum "${UNSAFE_PACKAGE_FILE}")
+UNSAFE_SHA256=${UNSAFE_SHA256%% *}
+mkdir -p "${UNSAFE_ROOTFS}"
+write_config "${UNSAFE_CONFIG}" \
+    'https://mirror.postmarketos.org/test/unsafe-kernel.apk' \
+    "${UNSAFE_SHA256}"
+if WGET_LOG="${WGET_LOG}" \
+    FAKE_KERNEL_PACKAGE="${UNSAFE_PACKAGE_FILE}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/install-kernel.sh" \
+            "${UNSAFE_ROOTFS}" "${UNSAFE_CONFIG}" >/dev/null 2>&1; then
+    echo "kernel installer accepted an unsafe archive path" >&2
+    exit 1
+fi
+test -z "$(find "${UNSAFE_ROOTFS}" -mindepth 1 -print -quit)"
+
+# A staged symlink cannot replace an existing rootfs directory.
+SYMLINK_PACKAGE_ROOT="${TEST_ROOT}/symlink-package"
+SYMLINK_PACKAGE_FILE="${TEST_ROOT}/symlink-kernel.apk"
+SYMLINK_ROOTFS="${TEST_ROOT}/symlink-rootfs"
+SYMLINK_CONFIG="${TEST_ROOT}/symlink.conf"
+cp -a "${PACKAGE_ROOT}" "${SYMLINK_PACKAGE_ROOT}"
+ln -s boot "${SYMLINK_PACKAGE_ROOT}/collision"
+tar -czf "${SYMLINK_PACKAGE_FILE}" -C "${SYMLINK_PACKAGE_ROOT}" .
+SYMLINK_SHA256=$(sha256sum "${SYMLINK_PACKAGE_FILE}")
+SYMLINK_SHA256=${SYMLINK_SHA256%% *}
+mkdir -p "${SYMLINK_ROOTFS}/collision"
+write_config "${SYMLINK_CONFIG}" \
+    'https://mirror.postmarketos.org/test/symlink-kernel.apk' \
+    "${SYMLINK_SHA256}"
+if WGET_LOG="${WGET_LOG}" \
+    FAKE_KERNEL_PACKAGE="${SYMLINK_PACKAGE_FILE}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/install-kernel.sh" \
+            "${SYMLINK_ROOTFS}" "${SYMLINK_CONFIG}" >/dev/null 2>&1; then
+    echo "kernel installer replaced a rootfs directory with a symlink" >&2
+    exit 1
+fi
+test -d "${SYMLINK_ROOTFS}/collision"
+test ! -e "${SYMLINK_ROOTFS}/boot"
+
 # A digest-valid package that lacks a supported board DTB must not be installed.
 INCOMPLETE_PACKAGE_ROOT="${TEST_ROOT}/incomplete-package"
 INCOMPLETE_PACKAGE_FILE="${TEST_ROOT}/incomplete-kernel.apk"

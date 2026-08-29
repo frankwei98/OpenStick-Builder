@@ -261,6 +261,28 @@ for artifact in \
     aboot.mbn boot.bin gpt_both0.bin hyp.mbn rootfs.bin rpm.mbn sbl1.mbn tz.mbn; do
     printf '%s\n' "${artifact}" > "${BUILD_REPO}/files/${artifact}"
 done
+
+mv "${BUILD_REPO}/files/boot.bin" "${TEST_ROOT}/missing-boot.bin"
+if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
+    echo "artifact validation accepted a missing output" >&2
+    exit 1
+fi
+mv "${TEST_ROOT}/missing-boot.bin" "${BUILD_REPO}/files/boot.bin"
+
+: > "${BUILD_REPO}/files/rootfs.bin"
+if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
+    echo "artifact validation accepted an empty output" >&2
+    exit 1
+fi
+printf 'rootfs.bin\n' > "${BUILD_REPO}/files/rootfs.bin"
+
+printf 'metadata\n' > "${BUILD_REPO}/files/.DS_Store"
+if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
+    echo "artifact validation accepted a hidden extra output" >&2
+    exit 1
+fi
+rm "${BUILD_REPO}/files/.DS_Store"
+
 printf 'stale\n' > "${BUILD_REPO}/files/unexpected.bin"
 if (cd "${BUILD_REPO}" && scripts/validate-artifacts.sh >/dev/null 2>&1); then
     echo "artifact validation accepted a stale output" >&2
