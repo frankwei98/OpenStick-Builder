@@ -22,7 +22,15 @@ jobs:
       - name: Check script syntax
         run: |
           for script_path in build.sh scripts/*.sh; do
-            sh -n "${script_path}"
+            shebang=$(head -n 1 "${script_path}")
+            case "${shebang}" in
+              *bash*) bash -n "${script_path}" ;;
+              *sh*) sh -n "${script_path}" ;;
+              *)
+                echo "Unsupported script interpreter: ${script_path}: ${shebang}" >&2
+                exit 1
+                ;;
+            esac
           done
           for test_path in tests/test-*.sh; do
             bash -n "${test_path}"
