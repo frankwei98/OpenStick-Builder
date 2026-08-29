@@ -1,7 +1,11 @@
 # OpenStick Image Builder
 Image builder for MSM8916 based 4G modem dongles
 
-This builder uses the precompiled [kernel](https://pkgs.postmarketos.org/package/v24.06/postmarketos/aarch64/linux-postmarketos-qcom-msm8916) provided by [postmarketOS](https://postmarketos.org/) for Qualcomm MSM8916 devices.
+This builder uses the pinned postmarketOS v26.06
+[`linux-postmarketos-qcom-msm8916`](https://pkgs.postmarketos.org/package/v26.06/postmarketos/aarch64/linux-postmarketos-qcom-msm8916)
+kernel package for Qualcomm MSM8916 devices. The build downloads it over HTTPS,
+verifies its SHA-256 digest, and checks that the UFI003 and UZ801 DTBs are
+present before installing it into the image.
 
 > [!NOTE]
 > This branch generates a `debian` image, use the [alpine branch](https://github.com/kinsamanka/OpenStick-Builder/tree/alpine) for an `alpine` image.
@@ -230,10 +234,9 @@ Edit [`scripts/setup.sh`](scripts/setup.sh) to add/remove packages. Note that th
   resize2fs /dev/disk/by-partlabel/rootfs
   ```
 
-- To update the kernel of the `debian` image
-  ```shell
-  wget -O - http://mirror.postmarketos.org/postmarketos/<branch>/aarch64/linux-postmarketos-qcom-msm8916-<version>.apk \
-          | tar xkzf - -C / --exclude=.PKGINFO --exclude=.SIGN* 2>/dev/null
-  ```
-
-  Specify the correct `<branch>` and `<version>` values.
+- The image kernel is pinned in `configs/postmarketos-kernel.conf`. To update it,
+  change the branch, version, HTTPS URL, and SHA-256 digest together. Confirm the
+  new package still contains every file in
+  `POSTMARKETOS_KERNEL_REQUIRED_FILES`, then build and boot-test both supported
+  boards. Rebuilding the image is preferred to extracting an APK directly over
+  a running system.
