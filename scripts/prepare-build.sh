@@ -34,7 +34,7 @@ for output_name in build dist files mnt rootfs; do
     fi
 done
 
-rm -rf -- \
+rm -rf --one-file-system --preserve-root=all -- \
     "${REPO_ROOT:?}/build" \
     "${REPO_ROOT:?}/dist" \
     "${REPO_ROOT:?}/files" \

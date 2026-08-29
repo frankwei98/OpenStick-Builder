@@ -18,8 +18,11 @@ if ! ACTIVE_MOUNTS=$(findmnt -rn -o TARGET 2>/dev/null); then
 fi
 if printf '%s\n' "${ACTIVE_MOUNTS}" |
     awk -v mount_dir="${MOUNT_DIR}" \
-        '$0 == mount_dir { found = 1 } END { exit !found }'; then
-    echo "Refusing to reuse mounted image directory: ${MOUNT_DIR}" >&2
+        '$0 == mount_dir || index($0, mount_dir "/") == 1 {
+            found = 1
+        }
+        END { exit !found }'; then
+    echo "Refusing to reuse image directory containing a mount: ${MOUNT_DIR}" >&2
     exit 2
 fi
 

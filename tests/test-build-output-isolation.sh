@@ -188,7 +188,36 @@ if [ -n "${FAKE_ACTIVE_MOUNT:-}" ]; then
     printf '%s\n' "${FAKE_ACTIVE_MOUNT}"
 fi
 EOF
-chmod 0755 "${STUB_BIN}/findmnt"
+cat > "${STUB_BIN}/rm" <<'EOF'
+#!/bin/sh
+printf 'rm:%s\n' "$*" >> "${RM_LOG}"
+recursive=0
+set -- "$@"
+filtered=
+for argument do
+    case "${argument}" in
+        -rf) recursive=1 ;;
+        --one-file-system|--preserve-root=all|--) ;;
+        *) filtered="${filtered}
+${argument}" ;;
+    esac
+done
+set --
+while IFS= read -r argument; do
+    [ -n "${argument}" ] || continue
+    set -- "$@" "${argument}"
+done <<EOF_ARGS
+${filtered}
+EOF_ARGS
+if [ "${recursive}" -eq 1 ]; then
+    exec /bin/rm -rf -- "$@"
+fi
+exec /bin/rm -f -- "$@"
+EOF
+chmod 0755 "${STUB_BIN}/findmnt" "${STUB_BIN}/rm"
+
+RM_LOG="${TEST_ROOT}/rm.log"
+: > "${RM_LOG}"
 
 for output_path in build dist files mnt rootfs; do
     mkdir -p "${BUILD_REPO}/${output_path}"
@@ -198,8 +227,10 @@ touch "${BUILD_REPO}/rootfs.tgz" \
     "${BUILD_REPO}/rootfs.raw" "${BUILD_REPO}/boot.raw"
 (
     cd "${BUILD_REPO}"
-    PATH="${STUB_BIN}:${PATH}" scripts/prepare-build.sh
+    RM_LOG="${RM_LOG}" PATH="${STUB_BIN}:${PATH}" scripts/prepare-build.sh
 )
+grep -q -- '--one-file-system' "${RM_LOG}"
+grep -q -- '--preserve-root=all' "${RM_LOG}"
 for output_path in build dist files mnt rootfs; do
     test ! -e "${BUILD_REPO}/${output_path}"
 done
@@ -212,7 +243,8 @@ printf 'keep\n' > "${BUILD_REPO}/files/mounted/data"
 if (
     cd "${BUILD_REPO}"
     FAKE_ACTIVE_MOUNT="${BUILD_REPO}/files/mounted" \
-    PATH="${STUB_BIN}:${PATH}" scripts/prepare-build.sh >/dev/null 2>&1
+    RM_LOG="${RM_LOG}" PATH="${STUB_BIN}:${PATH}" \
+        scripts/prepare-build.sh >/dev/null 2>&1
 ); then
     echo "build preparation removed an output directory with an active mount" >&2
     exit 1
