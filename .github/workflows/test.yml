@@ -39,7 +39,7 @@ jobs:
           done
 
       - name: Run ShellCheck
-        run: shellcheck -e SC1091,SC2034 build.sh scripts/*.sh tests/test-*.sh
+        run: shellcheck -e SC1091 build.sh scripts/*.sh tests/test-*.sh
 
       - name: Run regression tests
         run: |
