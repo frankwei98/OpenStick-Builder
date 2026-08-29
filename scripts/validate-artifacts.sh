@@ -30,7 +30,7 @@ printf '%s\n' "${EXPECTED_ARTIFACTS}" |
         fi
     done
 
-for artifact_path in "${ARTIFACT_DIR}"/*; do
+for artifact_path in "${ARTIFACT_DIR}"/.[!.]* "${ARTIFACT_DIR}"/..?* "${ARTIFACT_DIR}"/*; do
     [ -e "${artifact_path}" ] || continue
     artifact_name=${artifact_path##*/}
     case "${artifact_name}" in
