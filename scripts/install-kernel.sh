@@ -23,6 +23,8 @@ fi
 # shellcheck disable=SC1090
 . "${KERNEL_CONFIG}"
 
+: "${POSTMARKETOS_KERNEL_BRANCH:?Missing POSTMARKETOS_KERNEL_BRANCH}"
+: "${POSTMARKETOS_KERNEL_VERSION:?Missing POSTMARKETOS_KERNEL_VERSION}"
 : "${POSTMARKETOS_KERNEL_URL:?Missing POSTMARKETOS_KERNEL_URL}"
 : "${POSTMARKETOS_KERNEL_SHA256:?Missing POSTMARKETOS_KERNEL_SHA256}"
 : "${POSTMARKETOS_KERNEL_REQUIRED_FILES:?Missing POSTMARKETOS_KERNEL_REQUIRED_FILES}"
@@ -31,6 +33,21 @@ case "${POSTMARKETOS_KERNEL_URL}" in
     https://*) ;;
     *)
         echo "Kernel package URL must use HTTPS" >&2
+        exit 1
+        ;;
+esac
+
+case "${POSTMARKETOS_KERNEL_URL}" in
+    https://*/"${POSTMARKETOS_KERNEL_BRANCH}"/*) ;;
+    *)
+        echo "Kernel package URL does not contain the configured branch" >&2
+        exit 1
+        ;;
+esac
+case "${POSTMARKETOS_KERNEL_URL}" in
+    *"${POSTMARKETOS_KERNEL_VERSION}.apk") ;;
+    *)
+        echo "Kernel package URL does not end with the configured version" >&2
         exit 1
         ;;
 esac

@@ -50,7 +50,11 @@ write_config() {
     config_path=$1
     package_url=$2
     package_sha256=$3
+    package_filename=${package_url##*/}
+    package_version=${package_filename%.apk}
     cat > "${config_path}" <<EOF
+POSTMARKETOS_KERNEL_BRANCH="test"
+POSTMARKETOS_KERNEL_VERSION="${package_version}"
 POSTMARKETOS_KERNEL_URL="${package_url}"
 POSTMARKETOS_KERNEL_SHA256="${package_sha256}"
 POSTMARKETOS_KERNEL_REQUIRED_FILES="
@@ -116,6 +120,27 @@ if WGET_LOG="${WGET_LOG}" \
 fi
 test ! -s "${WGET_LOG}"
 test -z "$(find "${HTTP_ROOTFS}" -mindepth 1 -print -quit)"
+
+# Human-readable branch and version pins must agree with the package URL.
+DRIFT_ROOTFS="${TEST_ROOT}/drift-rootfs"
+DRIFT_CONFIG="${TEST_ROOT}/drift.conf"
+mkdir -p "${DRIFT_ROOTFS}"
+cp "${VALID_CONFIG}" "${DRIFT_CONFIG}"
+cat >> "${DRIFT_CONFIG}" <<'EOF'
+POSTMARKETOS_KERNEL_BRANCH="wrong-branch"
+POSTMARKETOS_KERNEL_VERSION="wrong-version"
+EOF
+: > "${WGET_LOG}"
+if WGET_LOG="${WGET_LOG}" \
+    FAKE_KERNEL_PACKAGE="${PACKAGE_FILE}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/install-kernel.sh" \
+            "${DRIFT_ROOTFS}" "${DRIFT_CONFIG}" >/dev/null 2>&1; then
+    echo "kernel installer accepted branch/version drift" >&2
+    exit 1
+fi
+test ! -s "${WGET_LOG}"
+test -z "$(find "${DRIFT_ROOTFS}" -mindepth 1 -print -quit)"
 
 # A merged-/usr link may only resolve inside the target rootfs. Validate all
 # top-level entries before copying so a bad link cannot cause a partial install.
