@@ -285,19 +285,19 @@ exit 0
 EOF
 cat > "${FAIL_STUB_BIN}/rm" <<'EOF'
 #!/bin/sh
-case " $* " in
-    *" --one-file-system "*)
-        for argument do
-            target=${argument}
-        done
-        exec /bin/rm -rf -- "${target}"
-        ;;
-esac
+if [ "$#" -eq 5 ] && [ "$1" = "-rf" ] && \
+    [ "$2" = "--one-file-system" ] && \
+    [ "$3" = "--preserve-root=all" ] && [ "$4" = "--" ]; then
+    printf '%s\n' "$*" > "${RM_GUARD_LOG:?}"
+    exec /bin/rm -rf -- "$5"
+fi
 exec /bin/rm "$@"
 EOF
 chmod 0755 "${FAIL_STUB_BIN}"/*
+RM_GUARD_LOG="${TEST_ROOT}/rm-guard.log"
 if WGET_LOG="${WGET_LOG}" \
     FAKE_KERNEL_PACKAGE="${PACKAGE_FILE}" \
+    RM_GUARD_LOG="${RM_GUARD_LOG}" \
     PATH="${FAIL_STUB_BIN}:${PATH}" \
         "${REPO_ROOT}/scripts/install-kernel.sh" \
             "${DISCARD_ROOTFS}" "${VALID_CONFIG}" \
@@ -309,5 +309,7 @@ else
 fi
 test "${discard_status}" -eq 71
 test ! -e "${DISCARD_ROOTFS}"
+test "$(cat "${RM_GUARD_LOG}")" = \
+    "-rf --one-file-system --preserve-root=all -- ${DISCARD_ROOTFS}"
 
 printf 'kernel package verification tests passed\n'

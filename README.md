@@ -25,6 +25,10 @@ unsupported architectures. The AMD64 path remains available as a compatibility
 fallback, while the ARM64-native path avoids emulation during package
 configuration and is substantially faster.
 
+Production build scripts rely on the GNU coreutils and util-linux
+implementations provided by these Ubuntu releases. BSD and BusyBox hosts are
+not supported.
+
 By default the builder creates a generic image and the user selects the physical
 board after flashing. The generic image uses the historical UZ801 DTB only as a
 bootable management fallback; it deliberately leaves `/etc/openstick-board`
