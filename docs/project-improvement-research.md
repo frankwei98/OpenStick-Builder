@@ -1,6 +1,6 @@
 # OpenStick-Builder 项目改进研究
 
-研究日期：2026-08-29  
+研究日期：2026-08-29
 审查基线：`main` at `e36a47cc3949efeadeff984ef55899ec4c036a4b`
 
 ## 结论摘要
