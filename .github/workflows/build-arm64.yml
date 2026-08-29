@@ -33,6 +33,7 @@ jobs:
       - name: Run OpenStick regression tests
         run: |
           tests/test-build-host-architecture.sh
+          tests/test-build-mount-cleanup.sh
           tests/test-image-configuration.sh
           tests/test-openstick-modem-isolate.sh
           tests/test-openstick-board.sh
