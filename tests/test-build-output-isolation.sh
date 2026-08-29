@@ -13,6 +13,7 @@ mkdir -p \
     "${BUILD_REPO}/configs/templates" \
     "${BUILD_REPO}/src/qhypstub" \
     "${BUILD_REPO}/src/lk2nd/project" \
+    "${BUILD_REPO}/src/lk2nd/lk2nd/scripts" \
     "${BUILD_REPO}/src/qtestsign" \
     "${BUILD_REPO}/src/libusbgx" \
     "${BUILD_REPO}/src/gt/source" \
@@ -48,11 +49,18 @@ spotless:
 	rm -rf build-*
 lk1st-msm8916:
 	grep -q '^DEFINES += USE_TARGET_HS200_CAPS=1$$' project/lk1st-msm8916.mk
+	test "$(LK2ND_VERSION)" = test-lk2nd-version
 	mkdir -p build-lk1st-msm8916
-	printf '%s\n' "$(LK2ND_COMPATIBLE)" > build-lk1st-msm8916/emmc_appsboot.mbn
+	printf '%s|%s\n' "$(LK2ND_COMPATIBLE)" "$(LK2ND_VERSION)" \
+		> build-lk1st-msm8916/emmc_appsboot.mbn
 EOF
 printf 'TARGET := msm8916\n' \
     > "${BUILD_REPO}/src/lk2nd/project/lk1st-msm8916.mk"
+cat > "${BUILD_REPO}/src/lk2nd/lk2nd/scripts/describe-version.sh" <<'EOF'
+#!/bin/sh
+printf 'test-lk2nd-version\n'
+EOF
+chmod 0755 "${BUILD_REPO}/src/lk2nd/lk2nd/scripts/describe-version.sh"
 
 cat > "${BUILD_REPO}/src/qtestsign/qtestsign.py" <<'EOF'
 #!/bin/sh
@@ -81,7 +89,8 @@ for board_and_compatible in \
     board=${board_and_compatible%%:*}
     compatible=${board_and_compatible#*:}
     build_firmware "${board}"
-    test "$(cat "${BUILD_REPO}/files/aboot.mbn")" = "${compatible}"
+    test "$(cat "${BUILD_REPO}/files/aboot.mbn")" = \
+        "${compatible}|test-lk2nd-version"
     test -s "${BUILD_REPO}/files/hyp.mbn"
     current_hash=$(sha256sum \
         "${BUILD_REPO}/src/lk2nd/project/lk1st-msm8916.mk")
