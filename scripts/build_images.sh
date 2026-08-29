@@ -5,6 +5,7 @@ CHROOT=${CHROOT=$(pwd)/rootfs}
 #package rootfs
 rm -f rootfs.raw boot.raw
 mkdir -p files mnt
+rm -f -- files/rootfs.bin files/boot.bin
 
 MOUNT_DIR=$(CDPATH='' cd -P mnt && pwd -P)
 if ! command -v findmnt >/dev/null 2>&1; then

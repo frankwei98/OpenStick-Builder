@@ -34,10 +34,14 @@ jobs:
         run: |
           tests/test-build-host-architecture.sh
           tests/test-build-mount-cleanup.sh
+          tests/test-build-output-isolation.sh
           tests/test-image-configuration.sh
           tests/test-kernel-package.sh
           tests/test-openstick-modem-isolate.sh
           tests/test-openstick-board.sh
+
+      - name: Prepare clean build workspace
+        run: time sudo sh -e scripts/prepare-build.sh
 
       - name: Install dependencies
         run: time sudo sh -e scripts/install_deps.sh
@@ -92,6 +96,9 @@ jobs:
           file files/*
           sudo du -sh rootfs rootfs.tgz dist files
           df -h /
+
+      - name: Validate artifacts
+        run: sudo sh -e scripts/validate-artifacts.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -2,6 +2,10 @@
 
 CHROOT=${CHROOT-"$(pwd)/rootfs"}
 SRCDIR="$(pwd)/src"
+BUILD_ROOT="$(pwd)/build/gadget-tools"
+LIBUSBGX_BUILD_DIR="${BUILD_ROOT}/libusbgx"
+GT_BUILD_DIR="${BUILD_ROOT}/gt"
+DIST_DIR="$(pwd)/dist"
 TARGET_LIBDIR="${CHROOT}/usr/lib/aarch64-linux-gnu"
 TARGET_CFLAGS="--sysroot=${CHROOT} -B${TARGET_LIBDIR}/"
 TARGET_PKG_CONFIG_LIBDIR="${TARGET_LIBDIR}/pkgconfig:${CHROOT}/usr/lib/pkgconfig:${CHROOT}/usr/share/pkgconfig"
@@ -28,14 +32,15 @@ case "${ROOTFS_CHROOT_MODE}" in
 esac
 
 # build and install gt
+rm -rf -- "${BUILD_ROOT}" "${DIST_DIR}"
+mkdir -p "${LIBUSBGX_BUILD_DIR}" "${GT_BUILD_DIR}" "${DIST_DIR}"
 (
 cd src/libusbgx/
 autoreconf -i
 )
 
-mkdir -p build
 (
-cd build
+cd "${LIBUSBGX_BUILD_DIR}"
 CC=aarch64-linux-gnu-gcc \
 CFLAGS="${TARGET_CFLAGS}" \
 PKG_CONFIG_PATH='' \
@@ -45,25 +50,27 @@ PKG_CONFIG_LIBDIR="${TARGET_PKG_CONFIG_LIBDIR}" \
         --prefix=/usr \
         --with-sysroot="${CHROOT}"
 )
-make -C build "DESTDIR=$(pwd)/dist" install
+make -C "${LIBUSBGX_BUILD_DIR}" "DESTDIR=${DIST_DIR}" install
 
-rm -rf build/*
 PKG_CONFIG_PATH='' \
-PKG_CONFIG_LIBDIR="$(pwd)/dist/usr/lib/pkgconfig:${TARGET_PKG_CONFIG_LIBDIR}" \
+PKG_CONFIG_LIBDIR="${DIST_DIR}/usr/lib/pkgconfig:${TARGET_PKG_CONFIG_LIBDIR}" \
     cmake -DCMAKE_INSTALL_PREFIX=/usr \
         -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
         -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-        -DCMAKE_C_FLAGS="-B${TARGET_LIBDIR}/ -I$(pwd)/dist/usr/include -L$(pwd)/dist/usr/lib" \
-        -DCMAKE_CXX_FLAGS="-B${TARGET_LIBDIR}/ -I$(pwd)/dist/usr/include -L$(pwd)/dist/usr/lib" \
+        -DCMAKE_C_FLAGS="-B${TARGET_LIBDIR}/ -I${DIST_DIR}/usr/include -L${DIST_DIR}/usr/lib" \
+        -DCMAKE_CXX_FLAGS="-B${TARGET_LIBDIR}/ -I${DIST_DIR}/usr/include -L${DIST_DIR}/usr/lib" \
         -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
         -DCMAKE_SYSROOT="${CHROOT}" \
         -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
         -S "${SRCDIR}/gt/source" \
-        -B build
+        -B "${GT_BUILD_DIR}"
 
-make -C build "DESTDIR=$(pwd)/dist" install
+make -C "${GT_BUILD_DIR}" "DESTDIR=${DIST_DIR}" install
 
-rm -rf dist/usr/share dist/usr/lib/cmake dist/usr/lib/pkgconfig \
-    dist/usr/lib/*a dist/usr/bin/ga* dist/usr/bin/s* dist/usr/include
+rm -rf "${DIST_DIR:?}/usr/share" "${DIST_DIR:?}/usr/lib/cmake" \
+    "${DIST_DIR:?}/usr/lib/pkgconfig" "${DIST_DIR:?}"/usr/lib/*a \
+    "${DIST_DIR:?}"/usr/bin/ga* "${DIST_DIR:?}"/usr/bin/s* \
+    "${DIST_DIR:?}/usr/include"
 
-cp -a configs/templates dist/etc/gt
+mkdir -p "${DIST_DIR}/etc"
+cp -a configs/templates "${DIST_DIR}/etc/gt"
