@@ -29,6 +29,7 @@ jobs:
           tests/test-build-host-architecture.sh
           tests/test-build-mount-cleanup.sh
           tests/test-image-configuration.sh
+          tests/test-kernel-package.sh
           tests/test-openstick-modem-isolate.sh
           tests/test-openstick-board.sh
 

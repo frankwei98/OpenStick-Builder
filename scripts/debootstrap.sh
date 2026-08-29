@@ -237,9 +237,9 @@ chmod 0600 "${CHROOT}/etc/NetworkManager/system-connections/"*
 rm -f "${CHROOT}/etc/systemd/system/multi-user.target.wants/dnsmasq.service"
 ln -sf /dev/null "${CHROOT}/etc/systemd/system/dnsmasq.service"
 
-# install kernel
-wget -O - http://mirror.postmarketos.org/postmarketos/v24.06/aarch64/linux-postmarketos-qcom-msm8916-6.6-r5.apk \
-    | tar xkzf - -C "${CHROOT}" --exclude=.PKGINFO --exclude=.SIGN* 2>/dev/null
+# Install a pinned, verified kernel package only after the chroot mounts have
+# been released. The installer stages and validates the package before copying.
+scripts/install-kernel.sh "${CHROOT}" configs/postmarketos-kernel.conf
 
 mkdir -p "${CHROOT}/boot/extlinux"
 cp configs/extlinux.conf "${CHROOT}/boot/extlinux"
