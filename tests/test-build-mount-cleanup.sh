@@ -141,6 +141,25 @@ mkdir -p "${IMAGE_ROOT}/dist"
 : > "${COMMAND_LOG}"
 if (
     cd "${IMAGE_ROOT}"
+    FINDMNT_OUTPUT="${IMAGE_ROOT}/mnt/nested" \
+    COMMAND_LOG="${COMMAND_LOG}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/build_images.sh" >/dev/null 2>&1
+); then
+    echo "build_images accepted a descendant mount" >&2
+    exit 1
+else
+    image_mount_status=$?
+fi
+test "${image_mount_status}" -eq 2
+if grep -q '^mount:' "${COMMAND_LOG}"; then
+    echo "build_images mounted over a directory containing a child mount" >&2
+    exit 1
+fi
+
+: > "${COMMAND_LOG}"
+if (
+    cd "${IMAGE_ROOT}"
     FINDMNT_OUTPUT='' \
     COMMAND_LOG="${COMMAND_LOG}" \
     PATH="${STUB_BIN}:${PATH}" \
