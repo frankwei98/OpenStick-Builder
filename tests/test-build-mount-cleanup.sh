@@ -49,6 +49,12 @@ EOF
 cat > "${STUB_BIN}/mount" <<'EOF'
 #!/bin/sh
 printf 'mount:%s\n' "$*" >> "${COMMAND_LOG}"
+for argument do
+    target=${argument}
+done
+if [ -n "${MOUNT_FAIL_TARGET:-}" ] && [ "${target}" = "${MOUNT_FAIL_TARGET}" ]; then
+    exit 55
+fi
 EOF
 
 cat > "${STUB_BIN}/umount" <<'EOF'
@@ -59,6 +65,10 @@ EOF
 cat > "${STUB_BIN}/chroot" <<'EOF'
 #!/bin/sh
 printf 'chroot:%s\n' "$*" >> "${COMMAND_LOG}"
+if [ "${CHROOT_SIGNAL:-}" = TERM ]; then
+    kill -TERM "${PPID}"
+    exit 0
+fi
 exit 42
 EOF
 
@@ -104,6 +114,31 @@ if grep -q '^rm:' "${COMMAND_LOG}"; then
     exit 1
 fi
 
+# Failure during the mount sequence must only unwind mounts that succeeded.
+: > "${COMMAND_LOG}"
+if FINDMNT_OUTPUT='' \
+    MOUNT_FAIL_TARGET="${TEST_CHROOT}/dev/pts/" \
+    COMMAND_LOG="${COMMAND_LOG}" \
+    PATH="${STUB_BIN}:${PATH}" \
+    CHROOT="${TEST_CHROOT}" \
+    BUILD_HOST_ARCHITECTURE=arm64 \
+        "${REPO_ROOT}/scripts/debootstrap.sh" \
+        >"${TEST_ROOT}/debootstrap-output" 2>&1; then
+    echo "injected partial mount failure unexpectedly succeeded" >&2
+    exit 1
+else
+    partial_mount_status=$?
+fi
+test "${partial_mount_status}" -eq 55
+cat > "${TEST_ROOT}/expected-partial-umounts" <<EOF
+umount:${TEST_CHROOT}/dev
+umount:${TEST_CHROOT}/sys
+umount:${TEST_CHROOT}/proc
+EOF
+grep '^umount:' "${COMMAND_LOG}" > "${TEST_ROOT}/actual-umounts" || true
+diff -u "${TEST_ROOT}/expected-partial-umounts" \
+    "${TEST_ROOT}/actual-umounts"
+
 # A failure after all mounts must unmount only successful mounts in reverse order.
 : > "${COMMAND_LOG}"
 if FINDMNT_OUTPUT='' \
@@ -133,6 +168,25 @@ if ! diff -u "${TEST_ROOT}/expected-umounts" "${TEST_ROOT}/actual-umounts"; then
     echo "debootstrap did not clean mounts in reverse order" >&2
     exit 1
 fi
+
+# Signal exits preserve the conventional status and use the same LIFO cleanup.
+: > "${COMMAND_LOG}"
+if FINDMNT_OUTPUT='' \
+    CHROOT_SIGNAL=TERM \
+    COMMAND_LOG="${COMMAND_LOG}" \
+    PATH="${STUB_BIN}:${PATH}" \
+    CHROOT="${TEST_CHROOT}" \
+    BUILD_HOST_ARCHITECTURE=arm64 \
+        "${REPO_ROOT}/scripts/debootstrap.sh" \
+        >"${TEST_ROOT}/debootstrap-output" 2>&1; then
+    echo "injected TERM unexpectedly succeeded" >&2
+    exit 1
+else
+    signal_status=$?
+fi
+test "${signal_status}" -eq 143
+grep '^umount:' "${COMMAND_LOG}" > "${TEST_ROOT}/actual-umounts" || true
+diff -u "${TEST_ROOT}/expected-umounts" "${TEST_ROOT}/actual-umounts"
 
 # Image mounts need the same cleanup guarantee when tar or a later step fails.
 IMAGE_ROOT="${TEST_ROOT}/image-build"
