@@ -14,8 +14,9 @@ STUB_BIN="${TEST_ROOT}/bin"
 mkdir -p \
     "${PACKAGE_ROOT}/boot/dtbs/qcom" \
     "${PACKAGE_ROOT}/lib/modules/6.12.1-msm8916" \
-    "${ROOTFS}" \
+    "${ROOTFS}/usr/lib" \
     "${STUB_BIN}"
+ln -s usr/lib "${ROOTFS}/lib"
 
 printf 'kernel\n' > "${PACKAGE_ROOT}/boot/vmlinuz"
 printf 'ufi003 dtb\n' \
@@ -75,6 +76,8 @@ test -f "${ROOTFS}/boot/vmlinuz"
 test -f "${ROOTFS}/boot/dtbs/qcom/msm8916-thwc-ufi001c.dtb"
 test -f "${ROOTFS}/boot/dtbs/qcom/msm8916-yiming-uz801v3.dtb"
 test -f "${ROOTFS}/lib/modules/6.12.1-msm8916/modules.dep"
+test -L "${ROOTFS}/lib"
+test "$(readlink "${ROOTFS}/lib")" = usr/lib
 test ! -e "${ROOTFS}/.PKGINFO"
 test ! -e "${ROOTFS}/.SIGN.RSA.test"
 
@@ -113,6 +116,23 @@ if WGET_LOG="${WGET_LOG}" \
 fi
 test ! -s "${WGET_LOG}"
 test -z "$(find "${HTTP_ROOTFS}" -mindepth 1 -print -quit)"
+
+# A merged-/usr link may only resolve inside the target rootfs. Validate all
+# top-level entries before copying so a bad link cannot cause a partial install.
+ESCAPE_ROOTFS="${TEST_ROOT}/escape-rootfs"
+ESCAPE_TARGET="${TEST_ROOT}/outside-rootfs"
+mkdir -p "${ESCAPE_ROOTFS}" "${ESCAPE_TARGET}"
+ln -s "${ESCAPE_TARGET}" "${ESCAPE_ROOTFS}/lib"
+if WGET_LOG="${WGET_LOG}" \
+    FAKE_KERNEL_PACKAGE="${PACKAGE_FILE}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/install-kernel.sh" \
+            "${ESCAPE_ROOTFS}" "${VALID_CONFIG}" >/dev/null 2>&1; then
+    echo "kernel installer followed a rootfs link to an external directory" >&2
+    exit 1
+fi
+test -z "$(find "${ESCAPE_TARGET}" -mindepth 1 -print -quit)"
+test ! -e "${ESCAPE_ROOTFS}/boot"
 
 # A digest-valid package that lacks a supported board DTB must not be installed.
 INCOMPLETE_PACKAGE_ROOT="${TEST_ROOT}/incomplete-package"

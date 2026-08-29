@@ -8,7 +8,8 @@ if [ -z "${ROOTFS}" ] || [ ! -d "${ROOTFS}" ]; then
     echo "Kernel install rootfs is not a directory: ${ROOTFS}" >&2
     exit 1
 fi
-if [ "$(cd -P "${ROOTFS}" && pwd -P)" = / ]; then
+ROOTFS_REAL=$(cd -P "${ROOTFS}" && pwd -P)
+if [ "${ROOTFS_REAL}" = / ]; then
     echo "Refusing to install a kernel into /" >&2
     exit 1
 fi
@@ -62,13 +63,83 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+    TAR_IS_GNU=1
+else
+    TAR_IS_GNU=0
+fi
+
+list_kernel_package() {
+    if [ "${TAR_IS_GNU}" -eq 1 ]; then
+        tar --warning=no-unknown-keyword -tzf "${PACKAGE_FILE}"
+    else
+        tar -tzf "${PACKAGE_FILE}"
+    fi
+}
+
+extract_kernel_package() {
+    if [ "${TAR_IS_GNU}" -eq 1 ]; then
+        tar --warning=no-unknown-keyword -xzf "${PACKAGE_FILE}" \
+            -C "${STAGING_DIR}" \
+            --exclude=.PKGINFO --exclude='./.PKGINFO' \
+            --exclude='.SIGN*' --exclude='./.SIGN*'
+    else
+        tar -xzf "${PACKAGE_FILE}" -C "${STAGING_DIR}" \
+            --exclude=.PKGINFO --exclude='./.PKGINFO' \
+            --exclude='.SIGN*' --exclude='./.SIGN*'
+    fi
+}
+
+validate_staged_entry() {
+    staged_path=$1
+    entry_name=${staged_path##*/}
+    target_path="${ROOTFS_REAL}/${entry_name}"
+
+    if [ -d "${staged_path}" ] && [ ! -L "${staged_path}" ]; then
+        if [ -e "${target_path}" ] || [ -L "${target_path}" ]; then
+            if [ ! -d "${target_path}" ]; then
+                echo "Kernel package directory conflicts with rootfs path: ${entry_name}" >&2
+                return 1
+            fi
+            if ! target_real=$(CDPATH='' cd -P "${target_path}" && pwd -P); then
+                echo "Unable to resolve rootfs directory: ${entry_name}" >&2
+                return 1
+            fi
+            case "${target_real}" in
+                "${ROOTFS_REAL}"|"${ROOTFS_REAL}"/*) ;;
+                *)
+                    echo "Rootfs directory escapes through a symlink: ${entry_name}" >&2
+                    return 1
+                    ;;
+            esac
+        fi
+    elif [ -d "${target_path}" ] || [ -L "${target_path}" ]; then
+        echo "Kernel package file conflicts with rootfs path: ${entry_name}" >&2
+        return 1
+    fi
+}
+
+merge_staged_entry() {
+    staged_path=$1
+    entry_name=${staged_path##*/}
+    target_path="${ROOTFS_REAL}/${entry_name}"
+
+    if [ -d "${staged_path}" ] && [ ! -L "${staged_path}" ] && \
+        { [ -e "${target_path}" ] || [ -L "${target_path}" ]; }; then
+        target_real=$(CDPATH='' cd -P "${target_path}" && pwd -P)
+        cp -a "${staged_path}/." "${target_real}/"
+    else
+        cp -a "${staged_path}" "${ROOTFS_REAL}/"
+    fi
+}
+
 wget -O "${PACKAGE_FILE}" "${POSTMARKETOS_KERNEL_URL}"
 printf '%s  %s\n' "${POSTMARKETOS_KERNEL_SHA256}" "${PACKAGE_FILE}" \
     | sha256sum -c -
 
 # Validate the complete archive before copying any file into the rootfs. Strip
 # harmless leading ./ components so required-file checks are format agnostic.
-tar -tzf "${PACKAGE_FILE}" | sed 's|^\./||' > "${PACKAGE_LIST}"
+list_kernel_package | sed 's|^\./||' > "${PACKAGE_LIST}"
 while IFS= read -r archive_path; do
     case "${archive_path}" in
         /*|..|../*|*/../*|*/..)
@@ -88,7 +159,22 @@ printf '%s\n' "${POSTMARKETOS_KERNEL_REQUIRED_FILES}" \
     done
 
 mkdir -p "${STAGING_DIR}"
-tar -xzf "${PACKAGE_FILE}" -C "${STAGING_DIR}" \
-    --exclude=.PKGINFO --exclude='./.PKGINFO' \
-    --exclude='.SIGN*' --exclude='./.SIGN*'
-cp -a "${STAGING_DIR}/." "${ROOTFS}/"
+extract_kernel_package
+
+# Debian uses merged-/usr symlinks such as /lib -> usr/lib, while the Alpine
+# APK contains real top-level directories. Validate every merge destination
+# before copying anything, then merge directory contents through safe links.
+for staged_path in \
+    "${STAGING_DIR}"/* \
+    "${STAGING_DIR}"/.[!.]* \
+    "${STAGING_DIR}"/..?*; do
+    [ -e "${staged_path}" ] || [ -L "${staged_path}" ] || continue
+    validate_staged_entry "${staged_path}"
+done
+for staged_path in \
+    "${STAGING_DIR}"/* \
+    "${STAGING_DIR}"/.[!.]* \
+    "${STAGING_DIR}"/..?*; do
+    [ -e "${staged_path}" ] || [ -L "${staged_path}" ] || continue
+    merge_staged_entry "${staged_path}"
+done
