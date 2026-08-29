@@ -35,20 +35,20 @@ esac
 rm -rf -- "${BUILD_ROOT}" "${DIST_DIR}"
 mkdir -p "${LIBUSBGX_BUILD_DIR}" "${GT_BUILD_DIR}" "${DIST_DIR}"
 (
-cd src/libusbgx/
-autoreconf -i
+    cd src/libusbgx/
+    autoreconf -i
 )
 
 (
-cd "${LIBUSBGX_BUILD_DIR}"
-CC=aarch64-linux-gnu-gcc \
-CFLAGS="${TARGET_CFLAGS}" \
-PKG_CONFIG_PATH='' \
-PKG_CONFIG_LIBDIR="${TARGET_PKG_CONFIG_LIBDIR}" \
-    "${SRCDIR}/libusbgx/configure" \
-        --host aarch64-linux-gnu \
-        --prefix=/usr \
-        --with-sysroot="${CHROOT}"
+    cd "${LIBUSBGX_BUILD_DIR}"
+    CC=aarch64-linux-gnu-gcc \
+    CFLAGS="${TARGET_CFLAGS}" \
+    PKG_CONFIG_PATH='' \
+    PKG_CONFIG_LIBDIR="${TARGET_PKG_CONFIG_LIBDIR}" \
+        "${SRCDIR}/libusbgx/configure" \
+            --host aarch64-linux-gnu \
+            --prefix=/usr \
+            --with-sysroot="${CHROOT}"
 )
 make -C "${LIBUSBGX_BUILD_DIR}" "DESTDIR=${DIST_DIR}" install
 
