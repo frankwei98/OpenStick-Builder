@@ -13,6 +13,9 @@ on:
           - ufi003
           - uz801
 
+permissions:
+  contents: read
+
 jobs:
   build-arm64:
     runs-on: ubuntu-24.04-arm
