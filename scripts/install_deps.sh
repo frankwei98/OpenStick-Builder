@@ -32,6 +32,7 @@ apt install -y \
     python3-pyasn1-modules \
     python3-pycryptodome \
     unzip \
+    util-linux \
     wget \
     ${BUILD_HOST_EXTRA_PACKAGES}
 

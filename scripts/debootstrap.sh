@@ -67,7 +67,25 @@ case "${BUILD_ROOT}/" in
     "${CHROOT}/"*) invalid_chroot ;;
 esac
 
-rm -rf -- "${CHROOT}"
+if ! command -v findmnt >/dev/null 2>&1; then
+    echo "Unable to verify CHROOT mounts: findmnt is unavailable" >&2
+    exit 2
+fi
+
+if ! ACTIVE_MOUNTS=$(findmnt -rn -o TARGET 2>/dev/null); then
+    echo "Unable to inspect active mounts" >&2
+    exit 2
+fi
+CHROOT_MOUNTS=$(printf '%s\n' "${ACTIVE_MOUNTS}" |
+    awk -v chroot="${CHROOT}" \
+        '$0 == chroot || index($0, chroot "/") == 1')
+if [ -n "${CHROOT_MOUNTS}" ]; then
+    printf 'Refusing to remove CHROOT with active mounts:\n%s\n' \
+        "${CHROOT_MOUNTS}" >&2
+    exit 2
+fi
+
+rm -rf --one-file-system --preserve-root=all -- "${CHROOT}"
 
 case "${ROOTFS_BOOTSTRAP_MODE}" in
     foreign)
@@ -89,11 +107,67 @@ deb http://deb.debian.org/debian-security/ ${RELEASE}-security main contrib non-
 deb http://deb.debian.org/debian ${RELEASE}-updates main contrib non-free-firmware
 EOF
 
+CHROOT_PROC_MOUNTED=0
+CHROOT_SYS_MOUNTED=0
+CHROOT_DEV_MOUNTED=0
+CHROOT_DEV_PTS_MOUNTED=0
+CHROOT_RUN_MOUNTED=0
+
+cleanup_chroot_mounts() {
+    cleanup_status=$1
+    cleanup_failed=0
+    trap - EXIT HUP INT TERM
+
+    if [ "${CHROOT_RUN_MOUNTED}" -eq 1 ]; then
+        umount "${CHROOT}/run" || cleanup_failed=1
+    fi
+    if [ "${CHROOT_DEV_PTS_MOUNTED}" -eq 1 ]; then
+        umount "${CHROOT}/dev/pts" || cleanup_failed=1
+    fi
+    if [ "${CHROOT_DEV_MOUNTED}" -eq 1 ]; then
+        umount "${CHROOT}/dev" || cleanup_failed=1
+    fi
+    if [ "${CHROOT_SYS_MOUNTED}" -eq 1 ]; then
+        umount "${CHROOT}/sys" || cleanup_failed=1
+    fi
+    if [ "${CHROOT_PROC_MOUNTED}" -eq 1 ]; then
+        umount "${CHROOT}/proc" || cleanup_failed=1
+    fi
+
+    if [ "${cleanup_status}" -eq 0 ] && [ "${cleanup_failed}" -ne 0 ]; then
+        cleanup_status=1
+    fi
+    exit "${cleanup_status}"
+}
+
+unmount_chroot_filesystems() {
+    umount "${CHROOT}/run"
+    CHROOT_RUN_MOUNTED=0
+    umount "${CHROOT}/dev/pts"
+    CHROOT_DEV_PTS_MOUNTED=0
+    umount "${CHROOT}/dev"
+    CHROOT_DEV_MOUNTED=0
+    umount "${CHROOT}/sys"
+    CHROOT_SYS_MOUNTED=0
+    umount "${CHROOT}/proc"
+    CHROOT_PROC_MOUNTED=0
+}
+
+trap 'cleanup_chroot_mounts $?' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 mount -t proc proc "${CHROOT}/proc/"
+CHROOT_PROC_MOUNTED=1
 mount -t sysfs sys "${CHROOT}/sys/"
+CHROOT_SYS_MOUNTED=1
 mount -o bind /dev/ "${CHROOT}/dev/"
+CHROOT_DEV_MOUNTED=1
 mount -o bind /dev/pts/ "${CHROOT}/dev/pts/"
+CHROOT_DEV_PTS_MOUNTED=1
 mount -o bind /run "${CHROOT}/run/"
+CHROOT_RUN_MOUNTED=1
 
 cp scripts/setup.sh "${CHROOT}"
 case "${ROOTFS_BOOTSTRAP_MODE}" in
@@ -106,9 +180,7 @@ case "${ROOTFS_BOOTSTRAP_MODE}" in
 esac
 
 # cleanup
-for a in proc sys dev/pts dev run; do
-    umount "${CHROOT}/${a}"
-done;
+unmount_chroot_filesystems
 
 rm -f "${CHROOT}/setup.sh"
 : > "${CHROOT}/root/.bash_history"
