@@ -185,7 +185,7 @@ validate_staged_entry() {
             "$1"/..?*; do
             [ -e "${child_path}" ] || [ -L "${child_path}" ] || continue
             child_name=${child_path##*/}
-            validate_staged_entry "${child_path}" "$2/${child_name}"
+            validate_staged_entry "${child_path}" "$2/${child_name}" || return 1
         done
     elif [ -e "${target_path}" ] || [ -L "${target_path}" ]; then
         if [ -L "${target_path}" ] || [ ! -f "${target_path}" ]; then
