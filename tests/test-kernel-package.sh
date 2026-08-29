@@ -134,6 +134,30 @@ fi
 test -z "$(find "${ESCAPE_TARGET}" -mindepth 1 -print -quit)"
 test ! -e "${ESCAPE_ROOTFS}/boot"
 
+# Existing links below a valid top-level directory must not redirect a package
+# file outside the rootfs during the recursive merge.
+NESTED_ESCAPE_ROOTFS="${TEST_ROOT}/nested-escape-rootfs"
+NESTED_ESCAPE_TARGET="${TEST_ROOT}/nested-outside-vmlinuz"
+NESTED_ESCAPE_OUTPUT="${TEST_ROOT}/nested-escape-output"
+mkdir -p "${NESTED_ESCAPE_ROOTFS}/boot"
+printf 'outside kernel\n' > "${NESTED_ESCAPE_TARGET}"
+ln -s "${NESTED_ESCAPE_TARGET}" "${NESTED_ESCAPE_ROOTFS}/boot/vmlinuz"
+if WGET_LOG="${WGET_LOG}" \
+    FAKE_KERNEL_PACKAGE="${PACKAGE_FILE}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/install-kernel.sh" \
+            "${NESTED_ESCAPE_ROOTFS}" "${VALID_CONFIG}" \
+            >"${NESTED_ESCAPE_OUTPUT}" 2>&1; then
+    echo "kernel installer followed a nested rootfs link" >&2
+    exit 1
+fi
+grep -Fq 'Kernel package file conflicts with rootfs path: boot/vmlinuz' \
+    "${NESTED_ESCAPE_OUTPUT}"
+test "$(cat "${NESTED_ESCAPE_TARGET}")" = 'outside kernel'
+test -L "${NESTED_ESCAPE_ROOTFS}/boot/vmlinuz"
+test ! -e "${NESTED_ESCAPE_ROOTFS}/boot/dtbs"
+test ! -e "${NESTED_ESCAPE_ROOTFS}/lib"
+
 # A digest-valid package that lacks a supported board DTB must not be installed.
 INCOMPLETE_PACKAGE_ROOT="${TEST_ROOT}/incomplete-package"
 INCOMPLETE_PACKAGE_FILE="${TEST_ROOT}/incomplete-kernel.apk"

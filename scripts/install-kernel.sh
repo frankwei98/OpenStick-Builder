@@ -91,31 +91,40 @@ extract_kernel_package() {
 }
 
 validate_staged_entry() {
-    staged_path=$1
-    entry_name=${staged_path##*/}
-    target_path="${ROOTFS_REAL}/${entry_name}"
+    target_path="${ROOTFS_REAL}/$2"
 
-    if [ -d "${staged_path}" ] && [ ! -L "${staged_path}" ]; then
+    if [ -d "$1" ] && [ ! -L "$1" ]; then
         if [ -e "${target_path}" ] || [ -L "${target_path}" ]; then
             if [ ! -d "${target_path}" ]; then
-                echo "Kernel package directory conflicts with rootfs path: ${entry_name}" >&2
+                echo "Kernel package directory conflicts with rootfs path: $2" >&2
                 return 1
             fi
             if ! target_real=$(CDPATH='' cd -P "${target_path}" && pwd -P); then
-                echo "Unable to resolve rootfs directory: ${entry_name}" >&2
+                echo "Unable to resolve rootfs directory: $2" >&2
                 return 1
             fi
             case "${target_real}" in
                 "${ROOTFS_REAL}"|"${ROOTFS_REAL}"/*) ;;
                 *)
-                    echo "Rootfs directory escapes through a symlink: ${entry_name}" >&2
+                    echo "Rootfs directory escapes through a symlink: $2" >&2
                     return 1
                     ;;
             esac
         fi
-    elif [ -d "${target_path}" ] || [ -L "${target_path}" ]; then
-        echo "Kernel package file conflicts with rootfs path: ${entry_name}" >&2
-        return 1
+
+        for child_path in \
+            "$1"/* \
+            "$1"/.[!.]* \
+            "$1"/..?*; do
+            [ -e "${child_path}" ] || [ -L "${child_path}" ] || continue
+            child_name=${child_path##*/}
+            validate_staged_entry "${child_path}" "$2/${child_name}"
+        done
+    elif [ -e "${target_path}" ] || [ -L "${target_path}" ]; then
+        if [ -L "${target_path}" ] || [ ! -f "${target_path}" ]; then
+            echo "Kernel package file conflicts with rootfs path: $2" >&2
+            return 1
+        fi
     fi
 }
 
@@ -169,7 +178,7 @@ for staged_path in \
     "${STAGING_DIR}"/.[!.]* \
     "${STAGING_DIR}"/..?*; do
     [ -e "${staged_path}" ] || [ -L "${staged_path}" ] || continue
-    validate_staged_entry "${staged_path}"
+    validate_staged_entry "${staged_path}" "${staged_path##*/}"
 done
 for staged_path in \
     "${STAGING_DIR}"/* \
