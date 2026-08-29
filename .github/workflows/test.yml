@@ -1,0 +1,38 @@
+name: Fast checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fast-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check script syntax
+        run: |
+          for script_path in build.sh scripts/*.sh; do
+            sh -n "${script_path}"
+          done
+          for test_path in tests/test-*.sh; do
+            bash -n "${test_path}"
+          done
+
+      - name: Run ShellCheck
+        run: shellcheck -e SC1091,SC2034 build.sh scripts/*.sh tests/test-*.sh
+
+      - name: Run regression tests
+        run: |
+          for test_path in tests/test-*.sh; do
+            "${test_path}"
+          done
