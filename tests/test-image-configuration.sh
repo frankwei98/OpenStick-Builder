@@ -32,6 +32,8 @@ grep -qx 'dhcp-option=option:dns-server' "${DHCP_CONFIG}"
 grep -qx 'PermitEmptyPasswords no' "${SSH_CONFIG}"
 grep -qx 'PermitRootLogin prohibit-password' "${SSH_CONFIG}"
 grep -qx 'Match User root Address 172.30.255.2 LocalAddress 172.30.255.1' "${SSH_CONFIG}"
+grep -qx 'Match User user Address \*,!172.30.255.2' "${SSH_CONFIG}"
+grep -qx 'Match User user LocalAddress \*,!172.30.255.1' "${SSH_CONFIG}"
 
 if command -v sshd >/dev/null 2>&1 && command -v ssh-keygen >/dev/null 2>&1; then
     ssh-keygen -q -t ed25519 -N '' -f "${TEST_ROOT}/host-key"
@@ -40,21 +42,37 @@ if command -v sshd >/dev/null 2>&1 && command -v ssh-keygen >/dev/null 2>&1; the
         cat "${SSH_CONFIG}"
     } > "${TEST_ROOT}/sshd_config"
 
-    usb_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+    root_usb_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
         -C user=root,addr=172.30.255.2,laddr=172.30.255.1,lport=22)
-    wifi_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+    root_wifi_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
         -C user=root,addr=192.168.4.2,laddr=172.30.255.1,lport=22)
-    wifi_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+    root_wifi_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
         -C user=root,addr=192.168.4.2,laddr=192.168.4.1,lport=22)
+    user_usb_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+        -C user=user,addr=172.30.255.2,laddr=172.30.255.1,lport=22)
+    user_wifi_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+        -C user=user,addr=192.168.4.2,laddr=172.30.255.1,lport=22)
+    user_wifi_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+        -C user=user,addr=172.30.255.2,laddr=192.168.4.1,lport=22)
 
-    grep -qx 'permitrootlogin yes' <<< "${usb_policy}"
-    grep -qx 'permitemptypasswords no' <<< "${usb_policy}"
+    grep -qx 'permitrootlogin yes' <<< "${root_usb_policy}"
+    grep -qx 'passwordauthentication yes' <<< "${root_usb_policy}"
+    grep -qx 'permitemptypasswords no' <<< "${root_usb_policy}"
     # OpenSSH 8.9 reports the legacy "without-password" alias, while newer
     # releases report the canonical "prohibit-password" spelling.
     grep -Eqx 'permitrootlogin (prohibit-password|without-password)' \
-        <<< "${wifi_source_policy}"
+        <<< "${root_wifi_source_policy}"
     grep -Eqx 'permitrootlogin (prohibit-password|without-password)' \
-        <<< "${wifi_target_policy}"
+        <<< "${root_wifi_target_policy}"
+
+    grep -qx 'passwordauthentication yes' <<< "${user_usb_policy}"
+    grep -qx 'pubkeyauthentication yes' <<< "${user_usb_policy}"
+    grep -qx 'passwordauthentication no' <<< "${user_wifi_source_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${user_wifi_source_policy}"
+    grep -qx 'pubkeyauthentication yes' <<< "${user_wifi_source_policy}"
+    grep -qx 'passwordauthentication no' <<< "${user_wifi_target_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${user_wifi_target_policy}"
+    grep -qx 'pubkeyauthentication yes' <<< "${user_wifi_target_policy}"
 fi
 
 ssh-keygen -q -t ed25519 -N '' -f "${ROOTFS}/etc/ssh/ssh_host_ed25519_key"

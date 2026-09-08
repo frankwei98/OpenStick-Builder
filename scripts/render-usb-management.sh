@@ -172,6 +172,14 @@ Match User root Address ${USB_HOST_ADDRESS} LocalAddress ${USB_DEVICE_ADDRESS}
     PermitRootLogin yes
     PasswordAuthentication yes
 
+Match User user Address *,!${USB_HOST_ADDRESS}
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+
+Match User user LocalAddress *,!${USB_DEVICE_ADDRESS}
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+
 Match all
 EOF
 chmod 0644 "${ROOTFS}/etc/ssh/sshd_config.d/00-openstick-usb-root.conf"
