@@ -15,6 +15,8 @@ install -d "${ROOTFS}/etc"
 NM_PROFILE="${ROOTFS}/etc/NetworkManager/system-connections/usb-management.nmconnection"
 DHCP_CONFIG="${ROOTFS}/etc/openstick/usb-dhcp.conf"
 SSH_CONFIG="${ROOTFS}/etc/ssh/sshd_config.d/00-openstick-usb-root.conf"
+SETUP_CONFIG="${ROOTFS}/etc/openstick/setup.json"
+SETUP_NETWORK_CONFIG="${ROOTFS}/etc/openstick/setup-network.conf"
 
 grep -qx 'address1=172.30.255.1/30' "${NM_PROFILE}"
 grep -qx 'method=manual' "${NM_PROFILE}"
@@ -30,10 +32,17 @@ grep -qx 'dhcp-option=option:router' "${DHCP_CONFIG}"
 grep -qx 'dhcp-option=option:dns-server' "${DHCP_CONFIG}"
 
 grep -qx 'PermitEmptyPasswords no' "${SSH_CONFIG}"
-grep -qx 'PermitRootLogin prohibit-password' "${SSH_CONFIG}"
-grep -qx 'Match User root Address 172.30.255.2 LocalAddress 172.30.255.1' "${SSH_CONFIG}"
-grep -qx 'Match User user Address \*,!172.30.255.2' "${SSH_CONFIG}"
-grep -qx 'Match User user LocalAddress \*,!172.30.255.1' "${SSH_CONFIG}"
+grep -qx 'PermitRootLogin no' "${SSH_CONFIG}"
+grep -qx 'PasswordAuthentication no' "${SSH_CONFIG}"
+grep -qx 'KbdInteractiveAuthentication no' "${SSH_CONFIG}"
+grep -qx 'Match User openstick Address 172.30.255.2 LocalAddress 172.30.255.1' "${SSH_CONFIG}"
+grep -A1 -x 'Match User openstick Address 172.30.255.2 LocalAddress 172.30.255.1' "${SSH_CONFIG}" |
+    grep -qx '    PasswordAuthentication yes'
+
+grep -qx '{"address":"172.30.255.1","peer":"172.30.255.2"}' "${SETUP_CONFIG}"
+grep -qx 'USB_INTERFACE="usb0"' "${SETUP_NETWORK_CONFIG}"
+grep -qx 'USB_DEVICE_ADDRESS="172.30.255.1"' "${SETUP_NETWORK_CONFIG}"
+grep -qx 'USB_HOST_ADDRESS="172.30.255.2"' "${SETUP_NETWORK_CONFIG}"
 
 if command -v sshd >/dev/null 2>&1 && command -v ssh-keygen >/dev/null 2>&1; then
     ssh-keygen -q -t ed25519 -N '' -f "${TEST_ROOT}/host-key"
@@ -44,36 +53,66 @@ if command -v sshd >/dev/null 2>&1 && command -v ssh-keygen >/dev/null 2>&1; the
 
     root_usb_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
         -C user=root,addr=172.30.255.2,laddr=172.30.255.1,lport=22)
-    root_wifi_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+    root_other_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
         -C user=root,addr=192.168.4.2,laddr=172.30.255.1,lport=22)
-    root_wifi_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+    root_other_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
         -C user=root,addr=192.168.4.2,laddr=192.168.4.1,lport=22)
-    user_usb_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
-        -C user=user,addr=172.30.255.2,laddr=172.30.255.1,lport=22)
-    user_wifi_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
-        -C user=user,addr=192.168.4.2,laddr=172.30.255.1,lport=22)
-    user_wifi_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
-        -C user=user,addr=172.30.255.2,laddr=192.168.4.1,lport=22)
+    openstick_usb_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+        -C user=openstick,addr=172.30.255.2,laddr=172.30.255.1,lport=22)
+    openstick_other_source_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+        -C user=openstick,addr=192.168.4.2,laddr=172.30.255.1,lport=22)
+    openstick_other_target_policy=$(sshd -T -f "${TEST_ROOT}/sshd_config" \
+        -C user=openstick,addr=172.30.255.2,laddr=192.168.4.1,lport=22)
 
-    grep -qx 'permitrootlogin yes' <<< "${root_usb_policy}"
-    grep -qx 'passwordauthentication yes' <<< "${root_usb_policy}"
+    grep -qx 'permitrootlogin no' <<< "${root_usb_policy}"
+    grep -qx 'passwordauthentication no' <<< "${root_usb_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${root_usb_policy}"
     grep -qx 'permitemptypasswords no' <<< "${root_usb_policy}"
-    # OpenSSH 8.9 reports the legacy "without-password" alias, while newer
-    # releases report the canonical "prohibit-password" spelling.
-    grep -Eqx 'permitrootlogin (prohibit-password|without-password)' \
-        <<< "${root_wifi_source_policy}"
-    grep -Eqx 'permitrootlogin (prohibit-password|without-password)' \
-        <<< "${root_wifi_target_policy}"
+    grep -qx 'permitrootlogin no' <<< "${root_other_source_policy}"
+    grep -qx 'passwordauthentication no' <<< "${root_other_source_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${root_other_source_policy}"
+    grep -qx 'permitrootlogin no' <<< "${root_other_target_policy}"
+    grep -qx 'passwordauthentication no' <<< "${root_other_target_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${root_other_target_policy}"
 
-    grep -qx 'passwordauthentication yes' <<< "${user_usb_policy}"
-    grep -qx 'pubkeyauthentication yes' <<< "${user_usb_policy}"
-    grep -qx 'passwordauthentication no' <<< "${user_wifi_source_policy}"
-    grep -qx 'kbdinteractiveauthentication no' <<< "${user_wifi_source_policy}"
-    grep -qx 'pubkeyauthentication yes' <<< "${user_wifi_source_policy}"
-    grep -qx 'passwordauthentication no' <<< "${user_wifi_target_policy}"
-    grep -qx 'kbdinteractiveauthentication no' <<< "${user_wifi_target_policy}"
-    grep -qx 'pubkeyauthentication yes' <<< "${user_wifi_target_policy}"
+    grep -qx 'passwordauthentication yes' <<< "${openstick_usb_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${openstick_usb_policy}"
+    grep -qx 'pubkeyauthentication yes' <<< "${openstick_usb_policy}"
+    grep -qx 'passwordauthentication no' <<< "${openstick_other_source_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${openstick_other_source_policy}"
+    grep -qx 'pubkeyauthentication yes' <<< "${openstick_other_source_policy}"
+    grep -qx 'passwordauthentication no' <<< "${openstick_other_target_policy}"
+    grep -qx 'kbdinteractiveauthentication no' <<< "${openstick_other_target_policy}"
+    grep -qx 'pubkeyauthentication yes' <<< "${openstick_other_target_policy}"
 fi
+
+CUSTOM_ROOTFS="${TEST_ROOT}/custom-rootfs"
+CUSTOM_CONFIG="${TEST_ROOT}/custom-usb-management.conf"
+cat > "${CUSTOM_CONFIG}" <<'EOF'
+USB_INTERFACE="setup-test0"
+USB_DEVICE_ADDRESS="192.0.2.1"
+USB_PREFIX="30"
+USB_HOST_ADDRESS="192.0.2.2"
+USB_NETMASK="255.255.255.252"
+USB_DHCP_LEASE="30m"
+EOF
+install -d "${CUSTOM_ROOTFS}/etc"
+"${REPO_ROOT}/scripts/render-usb-management.sh" \
+    "${CUSTOM_ROOTFS}" "${CUSTOM_CONFIG}"
+grep -qx 'address1=192.0.2.1/30' \
+    "${CUSTOM_ROOTFS}/etc/NetworkManager/system-connections/usb-management.nmconnection"
+grep -qx 'dhcp-range=192.0.2.2,192.0.2.2,255.255.255.252,30m' \
+    "${CUSTOM_ROOTFS}/etc/openstick/usb-dhcp.conf"
+grep -qx 'Match User openstick Address 192.0.2.2 LocalAddress 192.0.2.1' \
+    "${CUSTOM_ROOTFS}/etc/ssh/sshd_config.d/00-openstick-usb-root.conf"
+grep -qx '{"address":"192.0.2.1","peer":"192.0.2.2"}' \
+    "${CUSTOM_ROOTFS}/etc/openstick/setup.json"
+grep -qx 'USB_INTERFACE="setup-test0"' \
+    "${CUSTOM_ROOTFS}/etc/openstick/setup-network.conf"
+grep -qx 'USB_DEVICE_ADDRESS="192.0.2.1"' \
+    "${CUSTOM_ROOTFS}/etc/openstick/setup-network.conf"
+grep -qx 'USB_HOST_ADDRESS="192.0.2.2"' \
+    "${CUSTOM_ROOTFS}/etc/openstick/setup-network.conf"
 
 ssh-keygen -q -t ed25519 -N '' -f "${ROOTFS}/etc/ssh/ssh_host_ed25519_key"
 dd if=/dev/urandom of="${ROOTFS}/etc/machine-id" bs=16 count=1 2>/dev/null
