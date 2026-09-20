@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>OpenStick · 首次设置</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+<div class="page">
+<header><div class="brand"><span class="brandmark" aria-hidden="true">O</span>OpenStick</div><span class="connection">USB 直连</span></header>
+<main>
+<section id="setup-view"><div class="eyebrow">WELCOME TO OPENSTICK</div><h1>从一个新密码开始。</h1><p>为你的设备设置管理员密码。<br>之后用它登录，以及执行 sudo 命令。</p>
+<form id="setup-form" novalidate>
+<div class="account"><span>管理员账户</span><code>openstick</code></div>
+<label for="password">新密码</label><div class="field"><input id="password" name="password" type="password" autocomplete="new-password" placeholder="输入新密码" aria-describedby="password-hint" required><button id="reveal" type="button" aria-label="显示密码" aria-pressed="false">显示</button></div><p class="hint" id="password-hint">12–128 个字符，可以使用空格和长口令。</p>
+<label for="confirmation">确认密码</label><input id="confirmation" name="confirmation" type="password" autocomplete="new-password" placeholder="再次输入密码" required>
+<div id="error" role="alert" hidden></div>
+<button id="submit" type="submit" disabled>正在连接设备…</button>
+<p class="notice">设置成功后，初始化入口将关闭，不再允许重新设置。</p>
+</form></section>
+<section id="success-view" hidden><div class="check" aria-hidden="true">✓</div><div class="eyebrow">YOU’RE ALL SET</div><h1 id="success-title">设备准备好了。</h1><p id="success-description">管理员密码已设置。<br>现在可以通过 SSH 登录 OpenStick。</p><div class="command"><span>在电脑终端中运行</span><code id="ssh-command"></code></div><p class="hint">登录和 sudo 均使用设置的密码。</p><div class="done-note">初始化入口已关闭。你可以关闭此页面。</div></section>
+<p id="status" role="status" aria-live="polite"></p>
+<noscript>请启用 JavaScript 并刷新页面，以完成首次设置。</noscript>
+</main><footer><span>OPENSTICK / 首次设置</span><span>仅通过 USB 设置</span></footer>
+</div>
+</body></html>

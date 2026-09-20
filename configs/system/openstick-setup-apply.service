@@ -1,0 +1,35 @@
+[Unit]
+Description=OpenStick first-boot account provisioning
+After=local-fs.target
+Before=openstick-setup-web.service
+
+[Service]
+Type=simple
+User=root
+Group=openstick-setup
+RuntimeDirectory=openstick-setup
+RuntimeDirectoryMode=0750
+StateDirectory=openstick-setup
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/libexec/openstick-setup apply
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ReadWritePaths=/etc /var/lib/openstick-setup /run/openstick-setup
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictSUIDSGID=yes
+LimitCORE=0
+TasksMax=32
+MemoryMax=64M
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
