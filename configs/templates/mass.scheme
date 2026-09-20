@@ -37,7 +37,8 @@ functions :
                     ro = false;
                     nofua = false;
                     removable = true;
-                    file = "/home/user/templates/mass.img";
+                    # Select backing storage explicitly after loading the template.
+                    file = "";
                 }, 
                 {
                     cdrom = true;
