@@ -23,6 +23,7 @@ apt install -y \
     cmake \
     debootstrap \
     device-tree-compiler \
+    e2fsprogs \
     fdisk \
     gcc-arm-none-eabi \
     libtool \
@@ -60,3 +61,6 @@ dpkg-deb -x "${KEYRING_PACKAGE}" "${KEYRING_EXTRACT_DIR}"
 install -D -m 0644 \
     "${KEYRING_EXTRACT_DIR}/usr/share/keyrings/debian-archive-keyring.pgp" \
     "${DEBOOTSTRAP_KEYRING}"
+
+# The setup service is compiled on the host and installed as a static ARM64 binary.
+scripts/install-go.sh

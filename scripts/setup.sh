@@ -40,7 +40,16 @@ apt install -qqy --no-install-recommends \
 apt clean
 rm -rf /var/lib/apt/lists/*
 
-printf 'root:1\n' | chpasswd
-
-echo user:1::::/home/user:/bin/bash | newusers
-echo 'user ALL=(ALL:ALL) NOPASSWD: ALL' > /etc/sudoers.d/user
+# Cloneable images have no shared login credential.
+usermod --lock root
+useradd --create-home --shell /bin/bash --password '!' openstick
+useradd --system --user-group --no-create-home --shell /usr/sbin/nologin openstick-setup
+printf 'openstick ALL=(ALL:ALL) ALL\n' > /etc/sudoers.d/openstick
+chmod 0440 /etc/sudoers.d/openstick
+visudo -cf /etc/sudoers.d/openstick
+printf 'Complete OpenStick setup over USB before logging in.\n' > /etc/nologin
+chmod 0644 /etc/nologin
+# Both login and sshd must enforce the persistent first-boot gate.
+for pam_service in login sshd; do
+    sed -i '1i account requisite pam_nologin.so' "/etc/pam.d/${pam_service}"
+done
