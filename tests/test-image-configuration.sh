@@ -17,10 +17,11 @@ DHCP_CONFIG="${ROOTFS}/etc/openstick/usb-dhcp.conf"
 SSH_CONFIG="${ROOTFS}/etc/ssh/sshd_config.d/00-openstick-usb-root.conf"
 SETUP_CONFIG="${ROOTFS}/etc/openstick/setup.json"
 SETUP_NETWORK_CONFIG="${ROOTFS}/etc/openstick/setup-network.conf"
-MASS_STORAGE_TEMPLATE="${REPO_ROOT}/configs/templates/mass.scheme"
+GADGET_TEMPLATES="${REPO_ROOT}/configs/templates"
+MASS_STORAGE_TEMPLATE="${GADGET_TEMPLATES}/mass.scheme"
 
-if grep -q '/home/user/' "${MASS_STORAGE_TEMPLATE}"; then
-    echo "mass-storage template references the removed user account" >&2
+if grep -R -n 'file = "/home/' "${GADGET_TEMPLATES}"; then
+    echo "gadget template contains an account-specific backing-file path" >&2
     exit 1
 fi
 test "$(grep -c '^[[:space:]]*file = "";' "${MASS_STORAGE_TEMPLATE}")" -eq 2

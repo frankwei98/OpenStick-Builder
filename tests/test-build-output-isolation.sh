@@ -108,7 +108,8 @@ cat > "${BUILD_REPO}/src/libusbgx/configure" <<'EOF'
 exit 0
 EOF
 chmod 0755 "${BUILD_REPO}/src/libusbgx/configure"
-printf 'template\n' > "${BUILD_REPO}/configs/templates/example"
+cp "${REPO_ROOT}/configs/templates/mass.scheme" \
+    "${BUILD_REPO}/configs/templates/mass.scheme"
 
 cat > "${STUB_BIN}/autoreconf" <<'EOF'
 #!/bin/sh
@@ -177,6 +178,9 @@ test ! -e "${BUILD_REPO}/dist/removed-by-new-build"
 test ! -e "${BUILD_REPO}/build/gadget-tools/removed-by-new-build"
 test -s "${BUILD_REPO}/dist/usr/bin/gt"
 test -s "${BUILD_REPO}/dist/usr/lib/libusbgx.so.2.0.0"
+test -s "${BUILD_REPO}/dist/etc/gt/mass.scheme"
+cmp "${BUILD_REPO}/configs/templates/mass.scheme" \
+    "${BUILD_REPO}/dist/etc/gt/mass.scheme"
 
 # A complete build starts clean, while an active mount anywhere below a
 # disposable output directory blocks cleanup.
