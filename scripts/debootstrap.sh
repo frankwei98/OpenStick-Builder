@@ -188,6 +188,11 @@ rm -f "${CHROOT}/setup.sh"
 echo "${HOST_NAME}" > "${CHROOT}/etc/hostname"
 sed -i "/localhost/ s/$/ ${HOST_NAME}/" "${CHROOT}/etc/hosts"
 
+# Embed the setup page and service into the archived rootfs.
+CHROOT="${CHROOT}" scripts/build_setup.sh
+install -D -m 0755 scripts/openstick-setup-firewall.sh \
+    "${CHROOT}/usr/sbin/openstick-setup-firewall"
+
 # setup systemd services
 cp -a configs/system/* "${CHROOT}/etc/systemd/system"
 
@@ -226,6 +231,11 @@ ln -sf /etc/systemd/system/openstick-usb-dhcp.service \
     "${CHROOT}/etc/systemd/system/usb-gadget.target.wants/openstick-usb-dhcp.service"
 ln -sf /etc/systemd/system/openstick-resize-rootfs.service \
     "${CHROOT}/etc/systemd/system/multi-user.target.wants/openstick-resize-rootfs.service"
+
+for service in openstick-setup-firewall openstick-setup-apply openstick-setup-web; do
+    ln -sf "/etc/systemd/system/${service}.service" \
+        "${CHROOT}/etc/systemd/system/multi-user.target.wants/${service}.service"
+done
 
 # setup NetworkManager
 cp configs/*.nmconnection "${CHROOT}/etc/NetworkManager/system-connections"

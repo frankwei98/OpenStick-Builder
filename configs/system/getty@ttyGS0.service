@@ -1,5 +1,5 @@
 [Unit]
-Description=Root console on USB serial gadget
+Description=Login console on USB serial gadget
 Requires=openstick-usb-gadget.service
 After=openstick-usb-gadget.service
 BindsTo=openstick-usb-gadget.service
@@ -7,7 +7,7 @@ BindsTo=openstick-usb-gadget.service
 [Service]
 Type=idle
 ExecStartPre=/usr/bin/test -c /dev/%I
-ExecStart=/sbin/agetty --autologin root -L %I 115200 vt100
+ExecStart=/sbin/agetty -L %I 115200 vt100
 Restart=always
 RestartSec=1
 UtmpIdentifier=%I

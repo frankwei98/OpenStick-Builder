@@ -163,22 +163,14 @@ EOF
 chmod 0644 "${ROOTFS}/etc/openstick/usb-dhcp.conf"
 
 cat > "${ROOTFS}/etc/ssh/sshd_config.d/00-openstick-usb-root.conf" << EOF
-# Preserve root public-key access elsewhere, but allow its initial password
-# only when the connection is addressed to the USB management endpoint.
+# Password authentication is permitted only on the USB management pair.
 PermitEmptyPasswords no
-PermitRootLogin prohibit-password
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
 
-Match User root Address ${USB_HOST_ADDRESS} LocalAddress ${USB_DEVICE_ADDRESS}
-    PermitRootLogin yes
+Match User openstick Address ${USB_HOST_ADDRESS} LocalAddress ${USB_DEVICE_ADDRESS}
     PasswordAuthentication yes
-
-Match User user Address *,!${USB_HOST_ADDRESS}
-    PasswordAuthentication no
-    KbdInteractiveAuthentication no
-
-Match User user LocalAddress *,!${USB_DEVICE_ADDRESS}
-    PasswordAuthentication no
-    KbdInteractiveAuthentication no
 
 Match all
 EOF
@@ -188,3 +180,13 @@ cat > "${ROOTFS}/etc/udev/rules.d/99-nm-usb-management.rules" << EOF
 SUBSYSTEM=="net", ACTION=="add|change|move", KERNEL=="${USB_INTERFACE}", ENV{NM_UNMANAGED}="0"
 EOF
 chmod 0644 "${ROOTFS}/etc/udev/rules.d/99-nm-usb-management.rules"
+
+cat > "${ROOTFS}/etc/openstick/setup.json" << EOF
+{"address":"${USB_DEVICE_ADDRESS}","peer":"${USB_HOST_ADDRESS}"}
+EOF
+cat > "${ROOTFS}/etc/openstick/setup-network.conf" << EOF
+USB_INTERFACE="${USB_INTERFACE}"
+USB_DEVICE_ADDRESS="${USB_DEVICE_ADDRESS}"
+USB_HOST_ADDRESS="${USB_HOST_ADDRESS}"
+EOF
+chmod 0644 "${ROOTFS}/etc/openstick/setup.json" "${ROOTFS}/etc/openstick/setup-network.conf"
