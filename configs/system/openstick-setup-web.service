@@ -1,0 +1,34 @@
+[Unit]
+Description=OpenStick USB first-boot setup page
+Requires=openstick-setup-firewall.service openstick-setup-apply.service
+Wants=NetworkManager.service
+After=openstick-setup-firewall.service openstick-setup-apply.service NetworkManager.service
+ConditionPathExists=!/var/lib/openstick-setup/configured
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=openstick-setup
+Group=openstick-setup
+ExecStart=/usr/libexec/openstick-setup serve
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+LimitCORE=0
+TasksMax=32
+MemoryMax=64M
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Restrict OpenStick setup and USB SSH ingress
+After=local-fs.target
+Before=openstick-setup-web.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/openstick-setup-firewall
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
