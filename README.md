@@ -188,15 +188,37 @@ Edit [`scripts/setup.sh`](scripts/setup.sh) to add/remove packages. Note that th
 
   | usb0 | |
   | ----- | ---- |
-  | ip addr | 192.168.5.1 |
+  | ip addr | 172.30.255.1 |
 
-- Default user
-  
-  | | |
-  | ----- | ---- |
-  | username | user |
-  | password | 1 |
- 
+- First-boot administrator setup
+
+  Connect the device directly to a trusted computer over USB. Open
+  [the setup page](http://172.30.255.1:8080), and set a password of 12–128
+  characters for `openstick`. There is no default user or root password.
+  SSH and serial logins are unavailable until setup completes; root SSH and
+  serial auto-login are disabled. The first successful USB submission claims
+  the device, without an old password or pairing code. HTTP is unencrypted,
+  so use a trusted computer and direct USB connection.
+
+  Once the page confirms success, log in with:
+
+  ```shell
+  ssh openstick@172.30.255.1
+  ```
+
+  `sudo` requires the same password. Password-based SSH is restricted to USB;
+  other interfaces require an SSH public key installed after setup.
+  The setup service stops after success and stays closed across reboots.
+  Use `passwd` for later changes. To recover a forgotten password, reflash the
+  rootfs; this erases the existing system and its setup state.
+
+  If the connection drops during submission, try logging in with the password
+  you submitted. If necessary, reboot and check the setup page again. Recovery
+  preserves a password that was already written; it never silently replaces it.
+  See [the first-boot setup specification](docs/first-boot-setup.md) for the
+  service boundaries and recovery rules. This feature applies to fresh images;
+  installing these files over an existing installation is not a supported migration.
+
 - Show the recorded board, configured DTB, SIM registration, cellular-data
   state, and Wi-Fi address:
 
