@@ -7,10 +7,10 @@ CHROOT=$(CDPATH='' cd -P -- "${CHROOT}" 2>/dev/null && pwd -P) || {
     echo 'A prepared target rootfs is required' >&2
     exit 2
 }
-[ -d "${CHROOT}/etc" ] && [ "${CHROOT}" != / ] || {
+if [ ! -d "${CHROOT}/etc" ] || [ "${CHROOT}" = / ]; then
     echo 'A prepared target rootfs is required' >&2
     exit 2
-}
+fi
 [ -x "${GO_BIN}" ] || { echo 'Run scripts/install-go.sh first' >&2; exit 2; }
 output_dir="$(pwd)/build/setup"
 mkdir -p "${output_dir}"
