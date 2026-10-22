@@ -13,6 +13,9 @@ mkdir -p "${STUB_BIN}"
 
 cat > "${STUB_BIN}/findmnt" <<'EOF'
 #!/bin/sh
+if [ "${FINDMNT_FAIL:-}" = 1 ]; then
+    exit 31
+fi
 if [ -n "${FINDMNT_OUTPUT:-}" ]; then
     printf '%s\n' "${FINDMNT_OUTPUT}"
 fi
@@ -192,6 +195,22 @@ diff -u "${TEST_ROOT}/expected-umounts" "${TEST_ROOT}/actual-umounts"
 IMAGE_ROOT="${TEST_ROOT}/image-build"
 mkdir -p "${IMAGE_ROOT}/dist"
 : > "${IMAGE_ROOT}/rootfs.tgz"
+mkdir -p "${IMAGE_ROOT}/files" "${TEST_ROOT}/expected-images"
+for image_name in rootfs.raw boot.raw files/rootfs.bin files/boot.bin; do
+    printf 'preserve:%s\n' "${image_name}" > "${IMAGE_ROOT}/${image_name}"
+    cp "${IMAGE_ROOT}/${image_name}" "${TEST_ROOT}/expected-images/${image_name##*/}"
+done
+
+assert_images_preserved() {
+    for image_name in rootfs.raw boot.raw files/rootfs.bin files/boot.bin; do
+        if ! cmp -s "${TEST_ROOT}/expected-images/${image_name##*/}" \
+            "${IMAGE_ROOT}/${image_name}"; then
+            echo "build_images changed ${image_name} after a mount safety failure" >&2
+            exit 1
+        fi
+    done
+}
+
 : > "${COMMAND_LOG}"
 if (
     cd "${IMAGE_ROOT}"
@@ -206,8 +225,51 @@ else
     image_mount_status=$?
 fi
 test "${image_mount_status}" -eq 2
+assert_images_preserved
 if grep -q '^mount:' "${COMMAND_LOG}"; then
     echo "build_images mounted over a directory containing a child mount" >&2
+    exit 1
+fi
+
+# A mount at the image directory itself must also preserve all existing outputs.
+: > "${COMMAND_LOG}"
+if (
+    cd "${IMAGE_ROOT}"
+    FINDMNT_OUTPUT="${IMAGE_ROOT}/mnt" \
+    COMMAND_LOG="${COMMAND_LOG}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/build_images.sh" >/dev/null 2>&1
+); then
+    echo "build_images accepted a mount on its image directory" >&2
+    exit 1
+else
+    image_direct_mount_status=$?
+fi
+test "${image_direct_mount_status}" -eq 2
+assert_images_preserved
+if grep -q '^mount:' "${COMMAND_LOG}"; then
+    echo "build_images mounted over a directory that was itself mounted" >&2
+    exit 1
+fi
+
+# Failure to inspect mounts must preserve all existing outputs as well.
+: > "${COMMAND_LOG}"
+if (
+    cd "${IMAGE_ROOT}"
+    FINDMNT_FAIL=1 \
+    COMMAND_LOG="${COMMAND_LOG}" \
+    PATH="${STUB_BIN}:${PATH}" \
+        "${REPO_ROOT}/scripts/build_images.sh" >/dev/null 2>&1
+); then
+    echo "build_images continued after findmnt failed" >&2
+    exit 1
+else
+    image_findmnt_status=$?
+fi
+test "${image_findmnt_status}" -eq 2
+assert_images_preserved
+if grep -q '^mount:' "${COMMAND_LOG}"; then
+    echo "build_images mounted an image after findmnt failed" >&2
     exit 1
 fi
 

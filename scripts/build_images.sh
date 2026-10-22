@@ -3,9 +3,7 @@
 CHROOT=${CHROOT=$(pwd)/rootfs}
 
 #package rootfs
-rm -f rootfs.raw boot.raw
 mkdir -p files mnt
-rm -f -- files/rootfs.bin files/boot.bin
 
 MOUNT_DIR=$(CDPATH='' cd -P mnt && pwd -P)
 if ! command -v findmnt >/dev/null 2>&1; then
@@ -25,6 +23,10 @@ if printf '%s\n' "${ACTIVE_MOUNTS}" |
     echo "Refusing to reuse image directory containing a mount: ${MOUNT_DIR}" >&2
     exit 2
 fi
+
+# Remove stale outputs only after confirming that the mount directory is safe.
+rm -f rootfs.raw boot.raw
+rm -f -- files/rootfs.bin files/boot.bin
 
 IMAGE_MOUNTED=0
 
