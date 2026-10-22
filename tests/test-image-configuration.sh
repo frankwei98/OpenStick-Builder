@@ -122,6 +122,64 @@ grep -qx 'USB_DEVICE_ADDRESS="192.0.2.1"' \
 grep -qx 'USB_HOST_ADDRESS="192.0.2.2"' \
     "${CUSTOM_ROOTFS}/etc/openstick/setup-network.conf"
 
+# Exercise the gadget's configfs writes with the same generated configuration.
+# Real configfs creates these attributes when the RNDIS function is created.
+assert_rndis_interface() (
+    local rootfs=$1
+    local expected_interface=$2
+    export USB_NETWORK_CONFIG="${rootfs}/etc/openstick/setup-network.conf"
+    export CONFIG_FILE=/dev/null
+    export CONFIGFS_ROOT="${rootfs}/configfs"
+
+    mkdir -p "${CONFIGFS_ROOT}/usb_gadget/openstick"
+    # The status command only reads configuration and the fixture gadget.
+    # shellcheck source=scripts/openstick-usb-gadget.sh
+    source "${REPO_ROOT}/scripts/openstick-usb-gadget.sh" status >/dev/null
+    mkdir -p "${GADGET_PATH}/functions/rndis.usb0/os_desc/interface.rndis" \
+        "${GADGET_PATH}/configs/c.1" "${GADGET_PATH}/os_desc"
+    add_rndis fixture-serial
+    test -L "${GADGET_PATH}/configs/c.1/rndis.usb0"
+
+    # Simulate the kernel registering usb0 on UDC bind and reflecting ip rename.
+    printf 'usb0\n' > "${GADGET_PATH}/functions/rndis.usb0/ifname"
+    ip() {
+        test "$*" = "link set dev usb0 name ${expected_interface}"
+        printf '%s\n' "${expected_interface}" > "${GADGET_PATH}/functions/rndis.usb0/ifname"
+        printf '%s\n' "$*" > "${rootfs}/ip.log"
+    }
+    rename_rndis_interface
+    test "$(cat "${GADGET_PATH}/functions/rndis.usb0/ifname")" = "${expected_interface}"
+    if [ "${expected_interface}" = usb0 ]; then
+        test ! -e "${rootfs}/ip.log"
+    else
+        grep -Fxq "link set dev usb0 name ${expected_interface}" "${rootfs}/ip.log"
+    fi
+
+    # Reject a bound interface that does not match the generated network rules.
+    printf 'fixture-controller\n' > "${GADGET_PATH}/UDC"
+    printf 'wrong0\n' > "${GADGET_PATH}/functions/rndis.usb0/ifname"
+    if (validate_bound_gadget fixture-controller) > "${rootfs}/validation.log" 2>&1; then
+        echo 'gadget accepted an unexpected RNDIS interface name' >&2
+        exit 1
+    fi
+    grep -Fq "expected ${expected_interface}" "${rootfs}/validation.log"
+)
+assert_rndis_interface "${ROOTFS}" usb0
+assert_rndis_interface "${CUSTOM_ROOTFS}" setup-test0
+
+# Reject names that the kernel cannot use before generating any network rules.
+for invalid_interface in . .. this-name-is-too-long; do
+    sed "s/USB_INTERFACE=.*/USB_INTERFACE=\"${invalid_interface}\"/" \
+        "${CUSTOM_CONFIG}" > "${TEST_ROOT}/invalid-usb.conf"
+    if "${REPO_ROOT}/scripts/render-usb-management.sh" \
+        "${TEST_ROOT}/invalid-rootfs" "${TEST_ROOT}/invalid-usb.conf" \
+        > "${TEST_ROOT}/invalid-usb.log" 2>&1; then
+        echo "renderer accepted invalid interface: ${invalid_interface}" >&2
+        exit 1
+    fi
+    test ! -e "${TEST_ROOT}/invalid-rootfs"
+done
+
 ssh-keygen -q -t ed25519 -N '' -f "${ROOTFS}/etc/ssh/ssh_host_ed25519_key"
 dd if=/dev/urandom of="${ROOTFS}/etc/machine-id" bs=16 count=1 2>/dev/null
 install -d "${ROOTFS}/var/lib/dbus"

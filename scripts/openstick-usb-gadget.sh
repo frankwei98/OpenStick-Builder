@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 CONFIG_FILE=${CONFIG_FILE:-/etc/default/openstick-usb-gadget}
+USB_NETWORK_CONFIG=${USB_NETWORK_CONFIG:-/etc/openstick/setup-network.conf}
 CONFIGFS_ROOT=${CONFIGFS_ROOT:-/sys/kernel/config}
 UDC_ROOT=${UDC_ROOT:-/sys/class/udc}
 GADGET_NAME=${GADGET_NAME:-openstick}
@@ -16,6 +17,7 @@ USB_PRODUCT="OpenStick Development Board"
 USB_SERIAL=""
 RNDIS_HOST_MAC=""
 RNDIS_DEVICE_MAC=""
+USB_INTERFACE="usb0"
 UMS_IMAGE="${STATE_DIR}/storage.img"
 UMS_IMAGE_SIZE_MB=100
 UMS_LABEL="OPENSTICK"
@@ -35,6 +37,11 @@ load_config() {
         # The file is installed root-owned and contains shell assignments.
         # shellcheck source=/dev/null
         source "${CONFIG_FILE}"
+    fi
+    if [[ -r "${USB_NETWORK_CONFIG}" ]]; then
+        # Share the interface name generated for NetworkManager, DHCP and setup.
+        # shellcheck source=/dev/null
+        source "${USB_NETWORK_CONFIG}"
     fi
 }
 
@@ -225,6 +232,17 @@ add_rndis() {
     ln -s "${GADGET_PATH}/configs/c.1" "${GADGET_PATH}/os_desc/c.1"
 }
 
+rename_rndis_interface() {
+    local rndis_interface
+
+    # Configfs accepts a %d name template, not an arbitrary fixed interface name.
+    # Rename the registered link before NetworkManager configures it.
+    rndis_interface=$(< "${GADGET_PATH}/functions/rndis.usb0/ifname")
+    if [[ "${rndis_interface}" != "${USB_INTERFACE}" ]]; then
+        ip link set dev "${rndis_interface}" name "${USB_INTERFACE}"
+    fi
+}
+
 add_acm() {
     local function_path="${GADGET_PATH}/functions/acm.GS0"
 
@@ -288,6 +306,7 @@ start_gadget() {
     add_acm
     add_ums
     printf '%s\n' "${controller}" > "${GADGET_PATH}/UDC"
+    rename_rndis_interface
     validate_bound_gadget "${controller}"
     trap - ERR
 
@@ -364,8 +383,8 @@ validate_bound_gadget() {
     [[ -L "${GADGET_PATH}/configs/c.1/rndis.usb0" ]] ||
         die "RNDIS function is not linked"
     rndis_interface=$(< "${GADGET_PATH}/functions/rndis.usb0/ifname")
-    [[ "${rndis_interface}" == "usb0" ]] ||
-        die "RNDIS interface is ${rndis_interface:-missing}, expected usb0"
+    [[ "${rndis_interface}" == "${USB_INTERFACE}" ]] ||
+        die "RNDIS interface is ${rndis_interface:-missing}, expected ${USB_INTERFACE}"
 
     [[ -L "${GADGET_PATH}/configs/c.1/acm.GS0" ]] ||
         die "ACM function is not linked"

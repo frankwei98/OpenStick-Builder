@@ -39,11 +39,15 @@ validate_ipv4() {
 }
 
 case "${USB_INTERFACE}" in
-    *[!a-zA-Z0-9_.-]*)
+    .|..|*[!a-zA-Z0-9_.-]*)
         echo "Invalid USB_INTERFACE: ${USB_INTERFACE}" >&2
         exit 2
         ;;
 esac
+if [ "${#USB_INTERFACE}" -gt 15 ]; then
+    echo "USB_INTERFACE must not exceed 15 characters" >&2
+    exit 2
+fi
 
 case "${USB_PREFIX}" in
     ''|*[!0-9]*)
